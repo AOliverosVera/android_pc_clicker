@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Touchpad</string>
+
+    <!-- Touchpad -->
+    <string name="status_connected">Connected to %1$s</string>
+    <string name="status_searching_named">Looking for %1$s…</string>
+    <string name="status_searching_hint">Run touchpad-server on the PC and use the same Wi-Fi.</string>
+    <string name="button_left">Left</string>
+    <string name="button_right">Right</string>
+    <string name="unpair_button">Unpair</string>
+    <string name="unpair_title">Unpair this PC?</string>
+    <string name="unpair_body">The phone and the PC will both forget each other. To use the touchpad again you will need to pair again.</string>
+    <string name="unpair_confirm">Unpair</string>
+
+    <!-- Pairing -->
+    <string name="pair_title">Pair with your PC</string>
+    <string name="pair_intro">Run touchpad-server on your PC. It accepts new phones for 5 minutes after its first start, or after you type pair in its window.</string>
+    <string name="pair_searching">Looking for PCs on this Wi-Fi…</string>
+    <string name="pair_closed_hint">Not accepting phones: type pair in the server window</string>
+    <string name="pair_button">Pair</string>
+    <string name="pairing_contacting">Contacting %1$s…</string>
+    <string name="pairing_compare_title">Compare the codes</string>
+    <string name="pairing_compare_body">The server window on %1$s shows a 6-digit code. Check that it is exactly this one:</string>
+    <string name="pairing_compare_warning">If the codes are different, tap Cancel: another device may be trying to intercept the connection.</string>
+    <string name="pairing_codes_match">The codes match</string>
+    <string name="pairing_waiting_title">Confirm on the PC</string>
+    <string name="pairing_waiting_body">In the server window on %1$s, type y and press Enter.</string>
+    <string name="pairing_failed_title">Pairing didn\'t finish</string>
+    <string name="pairing_failed_closed">The PC isn\'t accepting new phones right now. Type pair in the server window, then try again.</string>
+    <string name="pairing_failed_busy">The PC is pairing with another phone. Wait a minute and try again.</string>
+    <string name="pairing_failed_rejected">Pairing was rejected on the PC.</string>
+    <string name="pairing_failed_timeout">Pairing took too long. Try again.</string>
+    <string name="pairing_failed_tampered">The connection gave inconsistent answers, so pairing was stopped for safety. If it keeps happening, someone on this network may be interfering.</string>
+    <string name="pairing_cancel">Cancel</string>
+    <string name="pairing_back">Back</string>
+
+    <!-- Notification -->
+    <string name="notification_channel">Connection</string>
+    <string name="notification_text">Tap to open the touchpad</string>
+    <string name="notification_disconnect">Disconnect</string>
+    <string name="notification_not_paired">Not paired with a PC yet</string>
+</resources>

@@ -1,0 +1,32 @@
+[package]
+name = "touchpad-server"
+version = "1.0.0"
+edition = "2024"
+description = "Receives touchpad input from the Android app over the LAN and moves the Windows mouse."
+license = "MIT"
+
+[dependencies]
+# All cryptography comes from the audited RustCrypto project; nothing is hand-rolled.
+aes-gcm = "0.11"
+getrandom = "0.4"
+hkdf = "0.13"
+hmac = "0.13"
+p256 = { version = "0.14", features = ["ecdh"] }
+sha2 = "0.11"
+subtle = "2.6"
+zeroize = "1.9"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Security_Cryptography",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_Shell",
+] }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

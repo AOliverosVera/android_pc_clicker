@@ -1,0 +1,43 @@
+# --- Build outputs (rebuilt by scripts/build.ps1) ---
+/dist/
+/pc-server/target/
+/android/.gradle/
+/android/.kotlin/
+/android/build/
+/android/app/build/
+/android/captures/
+/android/.cxx/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.hprof
+**/*.rs.bk
+
+# --- Machine-specific (generated; contains local paths) ---
+/android/local.properties
+
+# --- Secrets: never commit (the signing key lives in %USERPROFILE%\.touchpad) ---
+*.p12
+*.jks
+*.keystore
+*.pem
+*.key
+signing.properties
+keystore.properties
+.env
+pairings.dat
+
+# --- Editors and IDEs ---
+.idea/
+*.iml
+.vscode/
+*.swp
+
+# --- Operating system files ---
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# --- Logs ---
+*.log
