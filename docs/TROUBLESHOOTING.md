@@ -94,8 +94,9 @@ will need to pair again. To avoid this, keep and back up
 
 ## "Could not listen on UDP port 47820"
 
-Another copy of the server is already running (look for `touchpad-server.exe`
-in Task Manager; the startup shortcut runs it minimized), or another program
+Another copy of the server is already running (look for the Touchpad icon by
+the clock, under the **^** arrow, or for `touchpad-server.exe` in Task
+Manager; "Start with Windows" runs it hidden), or another program
 uses the port. `--port` changes the server's port, but the app only looks on
 47820, so it's for testing only.
 

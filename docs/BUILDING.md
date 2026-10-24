@@ -58,6 +58,8 @@ JDK and SDK.
 
 The script runs the tests (and Android Lint), then builds:
 - `dist\touchpad-server.exe`, an optimized release build
+- `dist\touchpad-tray.exe`, a window-less launcher that runs
+  `touchpad-server.exe --tray` (an icon by the clock, no console window)
 - `dist\Touchpad.apk`, a release build (R8-minified, signed with **your**
   private key)
 
@@ -125,8 +127,12 @@ Pairings are stored, DPAPI-encrypted, in `%APPDATA%\TouchpadServer\pairings.dat`
 `--data-dir <folder>` uses another folder (the interop test uses this, so it
 never touches your real pairings).
 
-`.\scripts\start-on-login.ps1` starts the server minimized at every login
-(`-Remove` undoes it). Run `.\scripts\allow-firewall.ps1` again if you move
+`.\scripts\start-on-login.ps1` starts Touchpad as a tray icon at every login,
+through `touchpad-tray.exe` and the per-user `Run` registry key
+(`-Remove` undoes it; the icon's "Start with Windows" item does the same).
+The launcher exists so nothing flashes at login: the server stays a console
+program, so its commands keep working and the firewall rule still covers it.
+Quit the tray icon before using `--list`/`--unpair`, and before rebuilding. Run `.\scripts\allow-firewall.ps1` again if you move
 the project folder, because the firewall rule names the exact `.exe` path.
 
 ## Tests

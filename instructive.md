@@ -144,20 +144,26 @@ connected in the background, and a notification shows **Connected to (your
 computer)**. To disconnect, tap **Disconnect** on that notification, or swipe
 Touchpad away from your recent apps.
 
-### Start the program automatically with Windows *(optional)*
+### Run it as an icon by the clock, and start it with Windows *(optional)*
 
-1. Press **Windows key + R**, type `shell:startup` and press **Enter**. A
-   folder opens.
-2. Right-click `touchpad-server.exe` in your Touchpad folder and choose
-   **Create shortcut** (on Windows 11, choose **Show more options** first).
-   Move the shortcut into that startup folder.
+Keep `touchpad-tray.exe` in the same folder as `touchpad-server.exe`.
 
-From now on, the program starts when you log in to Windows.
+1. Close the black window if it is open.
+2. Double-click **`touchpad-tray.exe`**. No window opens: a small green
+   touchpad icon appears next to the clock. If you don't see it, click the
+   **^** arrow there (hidden icons).
+3. Click the icon and choose **Start with Windows**. From now on Touchpad
+   starts by itself, hidden, every time you log in.
+
+Click the icon at any time to see whether a phone is connected, pair a new
+phone, or **Quit Touchpad**. When a phone asks to pair, a box with the code
+pops up instead: click **Yes** only if the phone shows the same code.
 
 ### Adding another phone
 
-Click on the black window, type **`pair`** and press **Enter**. For the next 5
-minutes a new phone can be paired, exactly as in Step 3.
+Click the Touchpad icon by the clock and choose **Pair a new phone**. If you
+use the black window instead, click on it, type **`pair`** and press **Enter**.
+For the next 5 minutes a new phone can be paired, exactly as in Step 3.
 
 ---
 

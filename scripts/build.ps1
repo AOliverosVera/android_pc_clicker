@@ -2,8 +2,9 @@
 .SYNOPSIS
     Builds the PC server and the Android app into ..\dist.
 .DESCRIPTION
-    Produces dist\touchpad-server.exe and dist\Touchpad.apk (release build,
-    signed with the debug key so it installs directly).
+    Produces dist\touchpad-server.exe, dist\touchpad-tray.exe (starts the
+    server as an icon by the clock) and dist\Touchpad.apk (release build).
+    Quit Touchpad from its icon first, or the old .exe files can't be replaced.
 .PARAMETER Only
     Build only "server" or "android". Default: both.
 #>
@@ -92,8 +93,10 @@ if ($Only -in "all", "server") {
         Invoke-Native "server tests" { & $cargo test --quiet }
         Invoke-Native "server build" { & $cargo build --release }
     } finally { Pop-Location }
-    Copy-Item (Join-Path $root "pc-server\target\release\touchpad-server.exe") $dist -Force
-    Write-Host "   -> dist\touchpad-server.exe" -ForegroundColor Green
+    foreach ($exe in "touchpad-server.exe", "touchpad-tray.exe") {
+        Copy-Item (Join-Path $root "pc-server\target\release\$exe") $dist -Force
+        Write-Host "   -> dist\$exe" -ForegroundColor Green
+    }
 }
 
 if ($Only -in "all", "android") {

@@ -4,6 +4,8 @@ mod input;
 mod protocol;
 mod server;
 mod store;
+#[cfg(windows)]
+mod tray;
 
 use std::io::{BufRead, ErrorKind};
 use std::net::{IpAddr, SocketAddr, UdpSocket};
@@ -24,6 +26,8 @@ const PAIRING_WINDOW: Duration = Duration::from_secs(5 * 60);
 const USAGE: &str = "\
 Usage:
   touchpad-server [--port N] [--pair]   run the server (--pair: accept a new phone)
+  touchpad-server --tray [--pair]       run with an icon by the clock instead of this window
+                                        (touchpad-tray.exe starts it this way)
   touchpad-server --list                list paired phones
   touchpad-server --unpair <ID|all>     forget a phone (ID prefix from --list)
   --data-dir <DIR>                      keep pairings in DIR instead of %APPDATA%\\TouchpadServer
@@ -40,7 +44,7 @@ struct Options {
 }
 
 enum Mode {
-    Run { port: u16, pair: bool },
+    Run { port: u16, pair: bool, tray: bool },
     List,
     Unpair(String),
 }
@@ -63,20 +67,25 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+    // In tray mode nobody sees the console, so errors go to a message box.
+    let tray = matches!(mode, Mode::Run { tray: true, .. });
+    let fail = |message: String| {
+        report_error(tray, &message);
+        ExitCode::FAILURE
+    };
 
     let path = match data_dir.map(|d| Ok(d.join("pairings.dat"))).unwrap_or_else(Store::default_path) {
         Ok(p) => p,
-        Err(e) => {
-            eprintln!("Cannot locate the settings folder: {e}");
-            return ExitCode::FAILURE;
-        }
+        Err(e) => return fail(format!("Cannot locate the settings folder: {e}")),
     };
     let mut store = match Store::load(&path) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("Cannot read {}: {e}", path.display());
-            eprintln!("Delete that file to start over (every phone will need to pair again).");
-            return ExitCode::FAILURE;
+            return fail(format!(
+                "Cannot read {}: {e}
+Delete that file to start over (every phone will need to pair again).",
+                path.display()
+            ));
         }
     };
 
@@ -99,23 +108,67 @@ fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
-        Mode::Run { port, pair } => run(store, port, pair),
+        Mode::Run { port, pair, tray: false } => run(store, port, pair),
+        #[cfg(windows)]
+        Mode::Run { port, pair, tray: true } => tray::run(store, port, pair),
+        #[cfg(not(windows))]
+        Mode::Run { tray: true, .. } => fail("--tray needs Windows.".to_string()),
+    }
+}
+
+fn report_error(tray: bool, message: &str) {
+    #[cfg(windows)]
+    if tray {
+        tray::error_box(message);
+        return;
+    }
+    let _ = tray;
+    eprintln!("{message}");
+}
+
+/// Opens the server's UDP socket, waking up every [`TICK`] when idle.
+fn bind(port: u16) -> Result<UdpSocket, String> {
+    let socket = UdpSocket::bind(("0.0.0.0", port)).map_err(|e| format!("Could not listen on UDP port {port}: {e}"))?;
+    socket.set_read_timeout(Some(TICK)).map_err(|e| format!("Could not set up the socket: {e}"))?;
+    Ok(socket)
+}
+
+/// The name phones see in their list.
+fn pc_name() -> String {
+    let raw_name = std::env::var("COMPUTERNAME").unwrap_or_else(|_| "PC".to_string());
+    sanitize_name(&raw_name, MAX_PC_NAME, "PC")
+}
+
+/// Waits up to one [`TICK`] for a datagram and answers it.
+fn receive(socket: &UdpSocket, server: &mut Server<SystemInput>, buf: &mut [u8]) {
+    match socket.recv_from(buf) {
+        Ok((len, from)) => {
+            // Only devices on the local network may talk to the server.
+            if is_local_network(from.ip())
+                && let Some(reply) = server.handle(&buf[..len], from, Instant::now())
+            {
+                let _ = socket.send_to(&reply, from);
+            }
+        }
+        Err(e) if matches!(e.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut) => {}
+        // Windows reports ICMP "port unreachable" from a vanished phone as a
+        // reset on the next receive; it is harmless.
+        Err(e) if e.kind() == ErrorKind::ConnectionReset => {}
+        Err(e) => eprintln!("receive error: {e}"),
     }
 }
 
 fn run(store: Store, port: u16, pair: bool) -> ExitCode {
-    let socket = match UdpSocket::bind(("0.0.0.0", port)) {
+    let socket = match bind(port) {
         Ok(socket) => socket,
-        Err(e) => {
-            eprintln!("Could not listen on UDP port {port}: {e}");
-            eprintln!("Is another touchpad-server already running?");
+        Err(message) => {
+            eprintln!("{message}");
+            eprintln!("Is another touchpad-server already running? (Check for the Touchpad icon by the clock.)");
             return ExitCode::FAILURE;
         }
     };
-    socket.set_read_timeout(Some(TICK)).expect("set_read_timeout");
 
-    let raw_name = std::env::var("COMPUTERNAME").unwrap_or_else(|_| "PC".to_string());
-    let name = sanitize_name(&raw_name, MAX_PC_NAME, "PC");
+    let name = pc_name();
     println!("Touchpad server v{} — \"{name}\"", env!("CARGO_PKG_VERSION"));
     match primary_lan_ip() {
         Some(ip) => println!("Listening on {ip}:{port} (UDP)."),
@@ -143,21 +196,7 @@ fn run(store: Store, port: u16, pair: bool) -> ExitCode {
     let mut buf = [0u8; 1500];
 
     loop {
-        match socket.recv_from(&mut buf) {
-            Ok((len, from)) => {
-                // Only devices on the local network may talk to the server.
-                if is_local_network(from.ip())
-                    && let Some(reply) = server.handle(&buf[..len], from, Instant::now())
-                {
-                    let _ = socket.send_to(&reply, from);
-                }
-            }
-            Err(e) if matches!(e.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut) => {}
-            // Windows reports ICMP "port unreachable" from a vanished phone as a
-            // reset on the next receive; it is harmless.
-            Err(e) if e.kind() == ErrorKind::ConnectionReset => {}
-            Err(e) => eprintln!("receive error: {e}"),
-        }
+        receive(&socket, &mut server, &mut buf);
 
         let now = Instant::now();
         while let Ok(command) = commands.try_recv() {
@@ -264,6 +303,7 @@ fn parse_args() -> Result<Options, String> {
     let mut args = std::env::args().skip(1);
     let mut port = protocol::PORT;
     let mut pair = false;
+    let mut tray = false;
     let mut mode = None;
     let mut data_dir = None;
     while let Some(arg) = args.next() {
@@ -273,6 +313,7 @@ fn parse_args() -> Result<Options, String> {
                 port = value.parse().map_err(|_| format!("invalid port: {value}"))?;
             }
             "--pair" => pair = true,
+            "--tray" => tray = true,
             "--list" => mode = Some(Mode::List),
             "--unpair" => mode = Some(Mode::Unpair(args.next().ok_or("--unpair needs an ID or 'all'")?)),
             "--data-dir" => data_dir = Some(args.next().ok_or("--data-dir needs a folder")?.into()),
@@ -280,7 +321,7 @@ fn parse_args() -> Result<Options, String> {
             other => return Err(format!("unknown argument: {other}\n\n{USAGE}")),
         }
     }
-    Ok(Options { mode: mode.unwrap_or(Mode::Run { port, pair }), data_dir })
+    Ok(Options { mode: mode.unwrap_or(Mode::Run { port, pair, tray }), data_dir })
 }
 
 fn is_local_network(ip: IpAddr) -> bool {
