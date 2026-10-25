@@ -84,6 +84,8 @@ struct Session {
     last_seen: Instant,
     last_event: Option<u16>,
     down: [bool; 2],
+    /// Id of the last key typed; keys have their own counter.
+    last_key: Option<u16>,
 }
 
 impl<S: InputSink> Server<S> {
@@ -342,6 +344,7 @@ impl<S: InputSink> Server<S> {
                 last_seen: now,
                 last_event: None,
                 down: [false; 2],
+                last_key: None,
             },
         );
         Some(welcome)
@@ -394,6 +397,19 @@ impl<S: InputSink> Server<S> {
                 if session.last_event.is_none_or(|last| is_newer(event, last)) {
                     session.last_event = Some(event);
                     set_button(sink, session, button, pressed);
+                }
+                None
+            }
+            Inner::Keys { first_event, strokes } => {
+                // Every KEYS packet repeats the phone's recent keys, oldest
+                // first, so a lost packet is made up by the next one. Each key
+                // is typed once and in order; older ids are copies.
+                for (i, stroke) in strokes.into_iter().enumerate() {
+                    let event = first_event.wrapping_add(i as u16);
+                    if session.last_key.is_none_or(|last| is_newer(event, last)) {
+                        session.last_key = Some(event);
+                        sink.key(stroke);
+                    }
                 }
                 None
             }
@@ -468,6 +484,7 @@ fn set_button<S: InputSink>(sink: &mut S, session: &mut Session, button: Button,
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::protocol::{Key, KeyStroke, Special, modifiers};
     use zeroize::Zeroizing;
 
     #[derive(Default)]
@@ -479,6 +496,13 @@ mod tests {
         }
         fn set_button(&mut self, button: Button, pressed: bool) {
             self.0.push(format!("{button:?} {}", if pressed { "down" } else { "up" }));
+        }
+        fn key(&mut self, stroke: KeyStroke) {
+            let key = match stroke.key {
+                Key::Text(c) => c.to_string(),
+                Key::Special(s) => format!("{s:?}"),
+            };
+            self.0.push(if stroke.mods == 0 { key } else { format!("{}+{key}", stroke.mods) });
         }
     }
 
@@ -594,6 +618,11 @@ mod tests {
 
     fn button(event: u16, button: Button, pressed: bool) -> Inner {
         Inner::Button { event, button, pressed }
+    }
+
+    /// Plain text keys `first_event`, `first_event + 1`, ...
+    fn keys(first_event: u16, text: &str) -> Inner {
+        Inner::Keys { first_event, strokes: text.chars().map(|c| KeyStroke { mods: 0, key: Key::Text(c) }).collect() }
     }
 
     // --- discovery
@@ -881,6 +910,71 @@ mod tests {
         assert!(s.store().phones().is_empty());
         assert!(s.sink().0.ends_with(&["Left up".to_string()]), "buttons released");
         assert!(s.handle(&phone.hello_packet([1; 16]), addr(), now).is_none());
+    }
+
+    // --- keyboard
+
+    #[test]
+    fn keys_are_typed_once_and_in_order() {
+        let (mut s, mut phone, now) = connected();
+        // As the app sends them: each packet repeats the recent keys, and is
+        // itself sent several times.
+        for _ in 0..3 {
+            phone.send(&mut s, keys(10, "h"), now);
+        }
+        for _ in 0..3 {
+            phone.send(&mut s, keys(10, "ho"), now);
+        }
+        phone.send(&mut s, keys(10, "hol"), now);
+        phone.send(&mut s, keys(11, "ola"), now);
+        assert_eq!(s.sink().0.concat(), "hola");
+    }
+
+    #[test]
+    fn a_lost_key_packet_is_made_up_by_the_next_one() {
+        let (mut s, mut phone, now) = connected();
+        phone.send(&mut s, keys(1, "a"), now);
+        let _lost = phone.packet(keys(1, "a\u{f1}"));
+        phone.send(&mut s, keys(1, "a\u{f1}o"), now);
+        assert_eq!(s.sink().0, vec!["a", "\u{f1}", "o"]);
+    }
+
+    #[test]
+    fn late_copies_of_old_keys_are_ignored() {
+        let (mut s, mut phone, now) = connected();
+        phone.send(&mut s, keys(5, "xy"), now);
+        let late = phone.packet(keys(5, "x"));
+        s.handle(&late, addr(), now);
+        assert_eq!(s.sink().0, vec!["x", "y"]);
+    }
+
+    #[test]
+    fn key_ids_work_across_u16_wraparound() {
+        let (mut s, mut phone, now) = connected();
+        phone.send(&mut s, keys(u16::MAX, "ab"), now);
+        phone.send(&mut s, keys(0, "bc"), now);
+        assert_eq!(s.sink().0.concat(), "abc");
+    }
+
+    #[test]
+    fn shortcuts_and_special_keys_reach_the_keyboard() {
+        let (mut s, mut phone, now) = connected();
+        let strokes = vec![
+            KeyStroke { mods: modifiers::CTRL, key: Key::Text('c') },
+            KeyStroke { mods: modifiers::SHIFT, key: Key::Special(Special::End) },
+            KeyStroke { mods: modifiers::WIN, key: Key::Special(Special::ModifiersOnly) },
+        ];
+        phone.send(&mut s, Inner::Keys { first_event: 3, strokes }, now);
+        assert_eq!(s.sink().0, vec!["2+c", "1+End", "8+ModifiersOnly"]);
+    }
+
+    #[test]
+    fn keys_and_buttons_have_separate_event_ids() {
+        let (mut s, mut phone, now) = connected();
+        phone.send(&mut s, button(100, Button::Left, true), now);
+        phone.send(&mut s, keys(1, "k"), now);
+        phone.send(&mut s, button(101, Button::Left, false), now);
+        assert_eq!(s.sink().0, vec!["Left down", "k", "Left up"]);
     }
 
     #[test]

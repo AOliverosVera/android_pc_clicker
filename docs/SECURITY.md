@@ -195,9 +195,18 @@ These are accepted, with the reason:
   so an observer can tell when the touchpad is in use.
 - **No forward secrecy for sessions.** Session keys come from the long-term
   pairing key plus nonces sent in the clear. Someone who records traffic and
-  *later* steals a pairing key could decrypt those recordings. The data is
-  pointer movement, so this was judged acceptable. A per-session ECDH would
-  remove it.
+  *later* steals a pairing key (from the phone or the PC) could decrypt those
+  recordings. With the keyboard this includes everything typed, passwords
+  too, so it matters more than it did for pointer movement alone. A
+  per-session ECDH in HELLO/WELCOME would remove it.
+- **Keystroke timing.** Each key is its own packet, so an observer on the
+  network sees when keys are pressed (not which). Timing alone has been used
+  to guess typed text in research settings.
+- **A paired phone can type.** Keyboard input is far more powerful than a
+  pointer (Win+R and a command). It is accepted only from paired phones
+  through the authenticated session, like the pointer; unpair any phone you
+  no longer control. Windows doesn't let injected input press Ctrl+Alt+Del or
+  type into elevated windows unless the server is elevated.
 - **The code check depends on the person.** Accepting different codes defeats
   the man-in-the-middle protection; the screens say so explicitly.
 - **Denial of service on the LAN** (flooding, Wi-Fi jamming) can interrupt the

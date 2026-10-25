@@ -130,6 +130,23 @@ You never have to do this again for this phone.
 
 Slow movements are precise; quick swipes travel further.
 
+### Using the keyboard
+
+Turn the phone **sideways** and the screen becomes a Spanish keyboard. Turn it
+upright again for the touchpad. (This works even if auto-rotate is off.)
+
+| To… | Do this |
+|---|---|
+| Type | Tap the keys. Hold a key to repeat it |
+| Capital letter | Tap **⇧** then the letter (only the next key is capital) |
+| All capitals | Tap **⇪**, tap it again to turn it off |
+| á é í ó ú, ü, à, ê… | Tap the accent key (**´**, or **⇧** + **´** for ¨), then the letter |
+| @ # € [ ] { } \ \| ~ | Tap **AltGr**, then the key with that small symbol in its corner |
+| A shortcut (Ctrl+C, Alt+Tab, Win+E…) | Tap **Ctrl**, **Alt** or **⊞**, then the key. To use it for several keys, keep holding it with one finger |
+| Open the Start menu | Tap **⊞** twice |
+
+Keys only reach the computer while the dot at the top is green.
+
 ### Next time
 
 1. Start `touchpad-server.exe` on the computer.
@@ -146,10 +163,10 @@ Touchpad away from your recent apps.
 
 ### Run it as an icon by the clock, and start it with Windows *(optional)*
 
-Keep `touchpad-tray.exe` in the same folder as `touchpad-server.exe`.
+Keep `touchpapp.exe` in the same folder as `touchpad-server.exe`.
 
 1. Close the black window if it is open.
-2. Double-click **`touchpad-tray.exe`**. No window opens: a small green
+2. Double-click **`touchpapp.exe`**. No window opens: a small green
    touchpad icon appears next to the clock. If you don't see it, click the
    **^** arrow there (hidden icons).
 3. Click the icon and choose **Start with Windows**. From now on Touchpad

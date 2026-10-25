@@ -59,7 +59,9 @@ class TouchpadClient(private val store: PairingStore, private val phoneName: Str
     private sealed interface Msg {
         data class Move(val dx: Int, val dy: Int) : Msg
         class Button(val button: Protocol.Button, val pressed: Boolean) : Msg
-        class Resend(val plaintext: ByteArray) : Msg
+        class Key(val stroke: Protocol.KeyStroke) : Msg
+        /** A repeat copy; dropped if the session changed since the original. */
+        class Resend(val plaintext: ByteArray, val channel: SecureChannel?) : Msg
         data class Pair(val pcId: String) : Msg
         data object ConfirmCode : Msg
         data object CancelPairing : Msg
@@ -110,6 +112,10 @@ class TouchpadClient(private val store: PairingStore, private val phoneName: Str
     }
 
     fun setButton(button: Protocol.Button, pressed: Boolean) = send(Msg.Button(button, pressed))
+
+    /** Types one key on the PC. Ignored while not connected, so nothing typed
+     *  offline is replayed later. */
+    fun key(stroke: Protocol.KeyStroke) = send(Msg.Key(stroke))
     fun pair(pc: FoundPc) = send(Msg.Pair(pc.id))
     fun confirmCode() = send(Msg.ConfirmCode)
     fun cancelPairing() = send(Msg.CancelPairing)
@@ -137,6 +143,10 @@ class TouchpadClient(private val store: PairingStore, private val phoneName: Str
         // Random start so a restarted app never looks like a replay of old events.
         private var eventId = Random.nextInt(0x10000)
         private var buttons = 0
+        // Keys have their own event ids. Every KEYS packet repeats the keys
+        // sent in the last moment, so the next packet makes up for a lost one.
+        private var keyEventId = Random.nextInt(0x10000)
+        private val recentKeys = ArrayDeque<SentKey>()
 
         private val found = LinkedHashMap<String, Pair<FoundPc, Long>>()
         private val foundAddresses = HashMap<String, InetSocketAddress>()
@@ -204,19 +214,17 @@ class TouchpadClient(private val store: PairingStore, private val phoneName: Str
                 is Msg.Button -> {
                     buttons = if (msg.pressed) buttons or msg.button.mask else buttons and msg.button.mask.inv()
                     eventId = (eventId + 1) and 0xFFFF
-                    val plaintext = Protocol.Inner.button(eventId, msg.button, msg.pressed)
-                    sendSecure(plaintext)
-                    // Wi-Fi loses packets in bursts, so copies are spread out in
-                    // time. Each copy is sealed again (new counter); the PC
-                    // applies only the first copy of each event.
-                    r.scope.launch {
-                        delay(20)
-                        r.control.trySend(Msg.Resend(plaintext))
-                        delay(40)
-                        r.control.trySend(Msg.Resend(plaintext))
-                    }
+                    sendWithCopies(Protocol.Inner.button(eventId, msg.button, msg.pressed))
                 }
-                is Msg.Resend -> sendSecure(msg.plaintext)
+                is Msg.Key -> if (channel != null) {
+                    keyEventId = (keyEventId + 1) and 0xFFFF
+                    recentKeys.addLast(SentKey(keyEventId, msg.stroke, now))
+                    while (recentKeys.size > Protocol.Inner.MAX_KEYS || now - recentKeys.first().sentAt > KEY_REPEAT_MS) {
+                        recentKeys.removeFirst()
+                    }
+                    sendWithCopies(Protocol.Inner.keys(recentKeys.first().id, recentKeys.map { it.stroke }))
+                }
+                is Msg.Resend -> if (msg.channel === channel) sendSecure(msg.plaintext)
                 is Msg.Pair -> startPairing(msg.pcId, now)
                 Msg.ConfirmCode -> if (attempt != null && attemptStep == Step.COMPARE) {
                     attemptStep = Step.CONFIRM
@@ -304,6 +312,7 @@ class TouchpadClient(private val store: PairingStore, private val phoneName: Str
                     val p = pairing ?: return
                     channel = ch
                     handshake = null
+                    recentKeys.clear()
                     pcAddress = d.from
                     store.lastAddress = d.from.address.hostAddress
                     lastHeardAt = now
@@ -417,6 +426,22 @@ class TouchpadClient(private val store: PairingStore, private val phoneName: Str
             sendSecure(Protocol.Inner.heartbeat(heartbeatSeq, eventId, buttons))
         }
 
+        /**
+         * Wi-Fi loses packets in bursts, so copies are spread out in time.
+         * Each copy is sealed again (new counter); the PC applies only the
+         * first copy of each event.
+         */
+        private fun sendWithCopies(plaintext: ByteArray) {
+            sendSecure(plaintext)
+            val sentOn = channel
+            r.scope.launch {
+                delay(20)
+                r.control.trySend(Msg.Resend(plaintext, sentOn))
+                delay(40)
+                r.control.trySend(Msg.Resend(plaintext, sentOn))
+            }
+        }
+
         private fun sendSecure(plaintext: ByteArray) {
             val ch = channel ?: return
             val target = pcAddress ?: return
@@ -426,6 +451,8 @@ class TouchpadClient(private val store: PairingStore, private val phoneName: Str
         private fun dropSession() {
             channel = null
             handshake = null
+            // A new session starts with no history: old keys must never replay.
+            recentKeys.clear()
             lastHelloAt = 0L
         }
 
@@ -474,6 +501,8 @@ class TouchpadClient(private val store: PairingStore, private val phoneName: Str
 
     private enum class Step { START, NONCE, COMPARE, CONFIRM }
 
+    private class SentKey(val id: Int, val stroke: Protocol.KeyStroke, val sentAt: Long)
+
     private fun addressOf(host: String): InetSocketAddress? =
         // Only IP literals are stored, so this never does a DNS lookup.
         runCatching { InetSocketAddress(InetAddress.getByName(host), Protocol.PORT) }.getOrNull()
@@ -486,6 +515,8 @@ class TouchpadClient(private val store: PairingStore, private val phoneName: Str
         const val DISCOVER_UNPAIRED_MS = 1_000L
         const val FOUND_TTL_MS = 4_000L
         const val PAIRING_TIMEOUT_MS = 120_000L
+        /** How long a key keeps being repeated in later KEYS packets. */
+        const val KEY_REPEAT_MS = 1_000L
     }
 }
 

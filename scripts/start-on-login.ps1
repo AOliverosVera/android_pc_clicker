@@ -8,7 +8,7 @@ param([switch]$Remove)
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
-$exe = Join-Path $root "dist\touchpad-tray.exe"
+$exe = Join-Path $root "dist\touchpapp.exe"
 $runKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
 # Older versions of this script used a minimized shortcut in the Startup folder.
 $oldShortcut = Join-Path ([Environment]::GetFolderPath("Startup")) "Touchpad server.lnk"
@@ -20,6 +20,6 @@ if ($Remove) {
     exit
 }
 
-if (-not (Test-Path $exe)) { throw "dist\touchpad-tray.exe not found. Run scripts\build.ps1 first." }
+if (-not (Test-Path $exe)) { throw "dist\touchpapp.exe not found. Run scripts\build.ps1 first." }
 Set-ItemProperty -Path $runKey -Name "Touchpad" -Value "`"$exe`""
 Write-Host "Touchpad will start as an icon by the clock at every login." -ForegroundColor Green

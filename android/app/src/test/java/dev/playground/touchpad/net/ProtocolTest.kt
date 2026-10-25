@@ -48,6 +48,23 @@ class ProtocolTest {
         assertNull(Protocol.Inner.decodeAck(bytes(0x02, 0x2A, 0, 0, 0)))
     }
 
+    /** The same bytes as `keys_match_documented_bytes` in protocol.rs. */
+    @Test fun keysMatchDocumentedBytes() {
+        val keys = Protocol.Inner.keys(
+            0x0102,
+            listOf(
+                Protocol.KeyStroke.text('á'.code),
+                Protocol.KeyStroke.special(Protocol.Special.f(1), Protocol.Mods.CTRL or Protocol.Mods.SHIFT),
+            ),
+        )
+        assertArrayEquals(
+            bytes(0x06, 0x02, 0x01, 0x02, 0x00, 0x00, 0xE1, 0x00, 0x00, 0x00, 0x03, 0x01, 0x31, 0x00, 0x00, 0x00),
+            keys,
+        )
+        val emoji = Protocol.Inner.keys(0, listOf(Protocol.KeyStroke.text("😀".codePointAt(0))))
+        assertArrayEquals(bytes(0x00, 0x00, 0x00, 0xF6, 0x01, 0x00), emoji.copyOfRange(4, 10))
+    }
+
     @Test fun decodesAnnounceWithUtf8Name() {
         val name = "Escritorio-Ñandú".toByteArray()
         val r = Protocol.decode(header(0x02) + ByteArray(8) { 9 } + bytes(1, name.size) + name) as Protocol.Reply.Announce

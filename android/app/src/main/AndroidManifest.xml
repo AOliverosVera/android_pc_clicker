@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Keeps Wi-Fi out of power-save while the service runs (WifiLock). -->
@@ -28,7 +29,14 @@
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTask"
+            android:screenOrientation="sensor"
+            tools:ignore="DiscouragedApi"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
             android:windowSoftInputMode="adjustNothing">
+            <!-- Upright is the touchpad, sideways the keyboard, so the screen
+                 follows the phone even with auto-rotate off (large screens on
+                 Android 16+ ignore this and rotate freely, which also works).
+                 Rotating doesn't restart the activity; Compose just redraws. -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

@@ -27,7 +27,7 @@ const USAGE: &str = "\
 Usage:
   touchpad-server [--port N] [--pair]   run the server (--pair: accept a new phone)
   touchpad-server --tray [--pair]       run with an icon by the clock instead of this window
-                                        (touchpad-tray.exe starts it this way)
+                                        (touchpapp.exe starts it this way)
   touchpad-server --list                list paired phones
   touchpad-server --unpair <ID|all>     forget a phone (ID prefix from --list)
   --data-dir <DIR>                      keep pairings in DIR instead of %APPDATA%\\TouchpadServer

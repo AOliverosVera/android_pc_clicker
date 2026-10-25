@@ -214,6 +214,91 @@ impl Button {
     }
 }
 
+/// Modifier bits of a [`KeyStroke`].
+pub mod modifiers {
+    pub const SHIFT: u8 = 0x01;
+    pub const CTRL: u8 = 0x02;
+    pub const ALT: u8 = 0x04;
+    pub const WIN: u8 = 0x08;
+    pub const ALL: u8 = SHIFT | CTRL | ALT | WIN;
+}
+
+/// Keys that don't type text.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Special {
+    /// Just the modifiers, pressed and released (Win alone opens Start).
+    ModifiersOnly,
+    Enter,
+    Backspace,
+    Tab,
+    Escape,
+    Delete,
+    Left,
+    Up,
+    Right,
+    Down,
+    Home,
+    End,
+    PageUp,
+    PageDown,
+    Insert,
+    /// F1 to F12.
+    F(u8),
+}
+
+impl Special {
+    const TABLE: [Special; 15] = [
+        Special::ModifiersOnly,
+        Special::Enter,
+        Special::Backspace,
+        Special::Tab,
+        Special::Escape,
+        Special::Delete,
+        Special::Left,
+        Special::Up,
+        Special::Right,
+        Special::Down,
+        Special::Home,
+        Special::End,
+        Special::PageUp,
+        Special::PageDown,
+        Special::Insert,
+    ];
+    const F1: u32 = 0x31;
+
+    fn from_wire(code: u32) -> Option<Special> {
+        match code {
+            0x31..=0x3C => Some(Special::F((code - Self::F1 + 1) as u8)),
+            _ => Self::TABLE.get(code as usize).copied(),
+        }
+    }
+
+    fn to_wire(self) -> u32 {
+        match self {
+            Special::F(n) => Self::F1 + u32::from(n) - 1,
+            other => Self::TABLE.iter().position(|s| *s == other).expect("in TABLE") as u32,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Key {
+    /// A character to type as is (never a control character).
+    Text(char),
+    Special(Special),
+}
+
+/// One key press: the modifiers are held around it and released right after,
+/// so nothing can stay stuck down on the PC.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct KeyStroke {
+    pub mods: u8,
+    pub key: Key,
+}
+
+/// A KEYS message carries at most this many strokes.
+pub const MAX_KEYS: usize = 8;
+
 /// Messages carried encrypted inside a Secure packet.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Inner {
@@ -225,6 +310,9 @@ pub enum Inner {
     Bye,
     /// The user removed the pairing on the phone; the PC forgets it too.
     Forget,
+    /// The phone's most recent key presses, oldest first, with consecutive
+    /// event ids starting at `first_event`. Each one is typed once.
+    Keys { first_event: u16, strokes: Vec<KeyStroke> },
     HeartbeatAck { seq: u32 },
 }
 
@@ -234,6 +322,7 @@ mod it {
     pub const BUTTON: u8 = 0x03;
     pub const BYE: u8 = 0x04;
     pub const FORGET: u8 = 0x05;
+    pub const KEYS: u8 = 0x06;
     pub const HEARTBEAT_ACK: u8 = 0x81;
 }
 
@@ -262,6 +351,15 @@ impl Inner {
             },
             it::BYE => Inner::Bye,
             it::FORGET => Inner::Forget,
+            it::KEYS => {
+                let first_event = u16::from_le_bytes(r.array()?);
+                let count = r.u8()? as usize;
+                if !(1..=MAX_KEYS).contains(&count) {
+                    return None;
+                }
+                let strokes = (0..count).map(|_| r.key_stroke()).collect::<Option<Vec<_>>>()?;
+                Inner::Keys { first_event, strokes }
+            }
             it::HEARTBEAT_ACK => Inner::HeartbeatAck { seq: u32::from_le_bytes(r.array()?) },
             _ => return None,
         })
@@ -289,6 +387,19 @@ impl Inner {
             }
             Inner::Bye => out.push(it::BYE),
             Inner::Forget => out.push(it::FORGET),
+            Inner::Keys { first_event, strokes } => {
+                out.push(it::KEYS);
+                out.extend_from_slice(&first_event.to_le_bytes());
+                out.push(strokes.len() as u8);
+                for stroke in strokes {
+                    let (kind, code) = match stroke.key {
+                        Key::Text(c) => (0, c as u32),
+                        Key::Special(s) => (1, s.to_wire()),
+                    };
+                    out.extend_from_slice(&[stroke.mods, kind]);
+                    out.extend_from_slice(&code.to_le_bytes());
+                }
+            }
             Inner::HeartbeatAck { seq } => {
                 out.push(it::HEARTBEAT_ACK);
                 out.extend_from_slice(&seq.to_le_bytes());
@@ -340,6 +451,23 @@ impl Reader<'_> {
         let (head, rest) = self.buf.split_at(N);
         self.buf = rest;
         head.try_into().ok()
+    }
+
+    /// `mods u8`, `kind u8` (0 text, 1 special), `code u32`. Anything
+    /// unknown, or a control character, makes the whole message invalid.
+    fn key_stroke(&mut self) -> Option<KeyStroke> {
+        let mods = self.u8()?;
+        let kind = self.u8()?;
+        let code = u32::from_le_bytes(self.array()?);
+        if mods & !modifiers::ALL != 0 {
+            return None;
+        }
+        let key = match kind {
+            0 => Key::Text(char::from_u32(code).filter(|c| !c.is_control())?),
+            1 => Key::Special(Special::from_wire(code)?),
+            _ => return None,
+        };
+        Some(KeyStroke { mods, key })
     }
 
     fn string(&mut self, max: usize) -> Option<String> {
@@ -475,6 +603,17 @@ mod tests {
             Inner::Button { event: 7, button: Button::Right, pressed: true },
             Inner::Bye,
             Inner::Forget,
+            Inner::Keys {
+                first_event: 9,
+                strokes: vec![
+                    KeyStroke { mods: 0, key: Key::Text('\u{f1}') },
+                    KeyStroke { mods: modifiers::CTRL, key: Key::Text('c') },
+                    KeyStroke { mods: modifiers::SHIFT, key: Key::Special(Special::Left) },
+                    KeyStroke { mods: modifiers::WIN, key: Key::Special(Special::ModifiersOnly) },
+                    KeyStroke { mods: 0, key: Key::Special(Special::F(12)) },
+                    KeyStroke { mods: 0, key: Key::Text('\u{1F600}') },
+                ],
+            },
             Inner::HeartbeatAck { seq: 42 },
         ] {
             assert_eq!(Inner::decode(&m.encode()), Some(m));
@@ -486,6 +625,49 @@ mod tests {
         );
         assert_eq!(Inner::decode(&[0x03, 0x07, 0x00, 0x09, 0x01]), None); // bad button
         assert_eq!(Inner::decode(&[]), None);
+    }
+
+    #[test]
+    fn keys_match_documented_bytes() {
+        let keys = Inner::Keys {
+            first_event: 0x0102,
+            strokes: vec![
+                KeyStroke { mods: 0, key: Key::Text('\u{e1}') },
+                KeyStroke { mods: modifiers::CTRL | modifiers::SHIFT, key: Key::Special(Special::F(1)) },
+            ],
+        };
+        assert_eq!(
+            keys.encode(),
+            vec![0x06, 0x02, 0x01, 0x02, 0x00, 0x00, 0xE1, 0x00, 0x00, 0x00, 0x03, 0x01, 0x31, 0x00, 0x00, 0x00]
+        );
+        for code in 0..=14u32 {
+            assert_eq!(Special::from_wire(code).map(Special::to_wire), Some(code));
+        }
+    }
+
+    #[test]
+    fn invalid_keys_are_rejected() {
+        let one = |mods: u8, kind: u8, code: u32| {
+            let mut m = vec![0x06, 0, 0, 1, mods, kind];
+            m.extend_from_slice(&code.to_le_bytes());
+            Inner::decode(&m)
+        };
+        assert!(one(0, 0, 'a' as u32).is_some());
+        assert_eq!(one(0x10, 0, 'a' as u32), None, "unknown modifier bit");
+        assert_eq!(one(0, 2, 'a' as u32), None, "unknown kind");
+        assert_eq!(one(0, 0, 0x1B), None, "control character (ESC)");
+        assert_eq!(one(0, 0, 0x0A), None, "control character (newline)");
+        assert_eq!(one(0, 0, 0xD800), None, "lone surrogate");
+        assert_eq!(one(0, 0, 0x11_0000), None, "beyond Unicode");
+        assert_eq!(one(0, 1, 15), None, "unknown special key");
+        assert_eq!(one(0, 1, 0x3D), None, "F13");
+        assert_eq!(Inner::decode(&[0x06, 0, 0, 0]), None, "no strokes");
+        let mut nine = vec![0x06, 0, 0, 9];
+        for _ in 0..9 {
+            nine.extend_from_slice(&[0, 0, b'a', 0, 0, 0]);
+        }
+        assert_eq!(Inner::decode(&nine), None, "more than MAX_KEYS");
+        assert_eq!(Inner::decode(&[0x06, 0, 0, 2, 0, 0, b'a', 0, 0, 0]), None, "truncated");
     }
 
     #[test]

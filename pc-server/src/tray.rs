@@ -402,7 +402,7 @@ fn show_menu(hwnd: HWND, x: i32, y: i32) {
             autostart::State::On => item(MF_STRING | MF_CHECKED, MENU_AUTOSTART, "Start with Windows"),
             autostart::State::Off => item(MF_STRING, MENU_AUTOSTART, "Start with Windows"),
             autostart::State::Unavailable => {
-                item(MF_STRING | MF_GRAYED, 0, "Start with Windows (touchpad-tray.exe is missing)")
+                item(MF_STRING | MF_GRAYED, 0, "Start with Windows (touchpapp.exe is missing)")
             }
         }
         AppendMenuW(menu, MF_SEPARATOR, 0, null());
@@ -540,7 +540,7 @@ fn copy_wide(dst: &mut [u16], s: &str) {
 
 /// "Start with Windows", stored where Windows looks for per-user startup
 /// programs: HKCU\Software\Microsoft\Windows\CurrentVersion\Run. It points at
-/// touchpad-tray.exe, which starts this server without a console window.
+/// touchpapp.exe, which starts this server without a console window.
 pub mod autostart {
     use std::path::PathBuf;
     use std::ptr::null_mut;
@@ -558,12 +558,12 @@ pub mod autostart {
     pub enum State {
         On,
         Off,
-        /// touchpad-tray.exe isn't next to this program.
+        /// touchpapp.exe isn't next to this program.
         Unavailable,
     }
 
     fn launcher() -> Option<PathBuf> {
-        let path = std::env::current_exe().ok()?.with_file_name("touchpad-tray.exe");
+        let path = std::env::current_exe().ok()?.with_file_name("touchpapp.exe");
         path.is_file().then_some(path)
     }
 
@@ -598,7 +598,7 @@ pub mod autostart {
 
     pub fn set(enable: bool) -> Result<(), String> {
         let status = if enable {
-            let command = command().ok_or("touchpad-tray.exe is not next to touchpad-server.exe")?;
+            let command = command().ok_or("touchpapp.exe is not next to touchpad-server.exe")?;
             let data = wide(&command);
             // SAFETY: `data` is a NUL-terminated UTF-16 string of the given size.
             unsafe {

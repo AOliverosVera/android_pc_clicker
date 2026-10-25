@@ -105,7 +105,30 @@ Messages inside (the plaintext):
 | `03` | BUTTON | phone → PC | `event u16`, `button u8` (0 left, 1 right), `pressed u8` (1 down, 0 up) |
 | `04` | BYE | phone → PC | none: the app is disconnecting |
 | `05` | FORGET | phone → PC | none: unpaired on the phone, so the PC forgets it too |
+| `06` | KEYS | phone → PC | `first_event u16`, `count u8` (1–8), then `count` × (`mods u8`, `kind u8`, `code u32`) |
 | `81` | HEARTBEAT_ACK | PC → phone | `seq u32` (echoed) |
+
+KEYS fields:
+
+- `mods`: bit 0 Shift, bit 1 Ctrl, bit 2 Alt, bit 3 Win; other bits must be 0.
+- `kind 0`, text: `code` is a Unicode scalar value, never a control character.
+  Without Ctrl/Alt/Win the PC types the character itself (`KEYEVENTF_UNICODE`),
+  so it comes out the same whatever keyboard layout the PC uses. With them,
+  it presses the key that types that character on the PC's current layout
+  (so Ctrl+C is a real Ctrl+C).
+- `kind 1`, special key: `code` 0 modifiers only (Win alone opens Start),
+  1 Enter, 2 Backspace, 3 Tab, 4 Escape, 5 Delete, 6 Left, 7 Up, 8 Right,
+  9 Down, 10 Home, 11 End, 12 Page Up, 13 Page Down, 14 Insert, `0x31`–`0x3C`
+  F1–F12.
+
+Each stroke is a complete tap: the PC presses the modifiers, then the key,
+and releases them in reverse order in one `SendInput` call, so no key is ever
+left held down. Anything unknown makes the whole message invalid. Accents
+(´ ` ^ ¨ as dead keys) are combined on the phone, which sends the finished
+letter.
+
+Example: `06 02 01 02` + `00 00 E1 00 00 00` (á) + `03 01 31 00 00 00`
+(Ctrl+Shift+F1) are events 0x0102 and 0x0103.
 
 ## Key derivation
 
@@ -133,6 +156,16 @@ is newer than the last applied event (`(a − b) as i16 > 0`, so it wraps
 correctly). A HEARTBEAT whose `last_event` is at least as new as the PC's
 makes the PC adopt its `buttons` state, which recovers an event whose three
 copies were all lost. An older heartbeat is ignored.
+
+**Keys are typed once, in order.** Keys have their own event counter
+(separate from buttons). Every KEYS message repeats the phone's keys from the
+last second, oldest first, up to 8, and is itself sent three times like a
+BUTTON. The PC types each stroke whose event id is newer than the last one it
+typed, in the order listed, so a lost packet is made up by the next one and
+copies are ignored. The phone drops keys typed while disconnected and starts
+each session with an empty history, so nothing is replayed into a new
+session. A PC without keyboard support ignores KEYS (an unknown message), so
+mixing versions is harmless.
 
 **Timers**
 

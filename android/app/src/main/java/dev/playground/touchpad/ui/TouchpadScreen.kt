@@ -94,8 +94,9 @@ fun TouchpadScreen(
     }
 }
 
+/** The connection dot and text; [onUnpair] adds the Unpair button. */
 @Composable
-private fun StatusLine(state: TouchpadClient.State, onUnpair: () -> Unit) {
+internal fun StatusLine(state: TouchpadClient.State, onUnpair: (() -> Unit)?) {
     val (color, text) = when (state) {
         is TouchpadClient.State.Connected -> Palette.Accent to buildString {
             append(stringResource(R.string.status_connected, state.pcName))
@@ -115,7 +116,9 @@ private fun StatusLine(state: TouchpadClient.State, onUnpair: () -> Unit) {
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        TextButton(onClick = onUnpair) { Text(stringResource(R.string.unpair_button), color = Palette.TextMuted, fontSize = 13.sp) }
+        if (onUnpair != null) {
+            TextButton(onClick = onUnpair) { Text(stringResource(R.string.unpair_button), color = Palette.TextMuted, fontSize = 13.sp) }
+        }
     }
     if (state is TouchpadClient.State.Searching) {
         Text(

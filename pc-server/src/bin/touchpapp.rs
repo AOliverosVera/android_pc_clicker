@@ -33,7 +33,7 @@ fn main() -> ExitCode {
     match started {
         Ok(_) => ExitCode::SUCCESS,
         Err(e) => fail(&format!(
-            "Could not start {}: {e}\n\nKeep touchpad-tray.exe in the same folder as touchpad-server.exe.",
+            "Could not start {}: {e}\n\nKeep touchpapp.exe in the same folder as touchpad-server.exe.",
             server.display()
         )),
     }
@@ -52,6 +52,6 @@ fn fail(text: &str) -> ExitCode {
 
 #[cfg(not(windows))]
 fn main() -> ExitCode {
-    eprintln!("touchpad-tray is for Windows. Run touchpad-server instead.");
+    eprintln!("touchpapp is for Windows. Run touchpad-server instead.");
     ExitCode::FAILURE
 }

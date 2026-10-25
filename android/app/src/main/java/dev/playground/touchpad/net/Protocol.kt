@@ -96,13 +96,76 @@ object Protocol {
 
     enum class Button(val wire: Byte, val mask: Int) { LEFT(0, 0b01), RIGHT(1, 0b10) }
 
+    /** Modifier bits of a [KeyStroke]. */
+    object Mods {
+        const val SHIFT = 0x01
+        const val CTRL = 0x02
+        const val ALT = 0x04
+        const val WIN = 0x08
+    }
+
+    /** Codes of the keys that don't type text. */
+    object Special {
+        /** Only the modifiers, pressed and released (Win alone opens Start). */
+        const val MODIFIERS_ONLY = 0
+        const val ENTER = 1
+        const val BACKSPACE = 2
+        const val TAB = 3
+        const val ESCAPE = 4
+        const val DELETE = 5
+        const val LEFT = 6
+        const val UP = 7
+        const val RIGHT = 8
+        const val DOWN = 9
+        const val HOME = 10
+        const val END = 11
+        const val PAGE_UP = 12
+        const val PAGE_DOWN = 13
+        const val INSERT = 14
+
+        /** F1 to F12. */
+        fun f(n: Int): Int {
+            require(n in 1..12)
+            return 0x30 + n
+        }
+    }
+
+    /**
+     * One key press. The PC holds [mods] around it and releases them right
+     * after, so nothing can stay stuck. [code] is a Unicode code point when
+     * [isText], else a [Special] code.
+     */
+    data class KeyStroke(val mods: Int, val isText: Boolean, val code: Int) {
+        companion object {
+            fun text(codePoint: Int, mods: Int = 0) = KeyStroke(mods, true, codePoint)
+            fun special(code: Int, mods: Int = 0) = KeyStroke(mods, false, code)
+        }
+    }
+
     object Inner {
         private const val HEARTBEAT: Byte = 0x01
         private const val MOVE: Byte = 0x02
         private const val BUTTON: Byte = 0x03
         private const val BYE: Byte = 0x04
         private const val FORGET: Byte = 0x05
+        private const val KEYS: Byte = 0x06
         private const val HEARTBEAT_ACK: Byte = 0x81.toByte()
+
+        /** A KEYS message carries at most this many strokes. */
+        const val MAX_KEYS = 8
+
+        /**
+         * The most recent key presses, oldest first, with consecutive event
+         * ids from [firstEvent]. The PC types each id once, so repeating
+         * recent keys in every packet makes up for lost packets.
+         */
+        fun keys(firstEvent: Int, strokes: List<KeyStroke>): ByteArray {
+            require(strokes.size in 1..MAX_KEYS)
+            return inner(KEYS, 3 + 6 * strokes.size) {
+                putShort(firstEvent.toShort()).put(strokes.size.toByte())
+                for (s in strokes) put(s.mods.toByte()).put(if (s.isText) 0 else 1).putInt(s.code)
+            }
+        }
 
         /** [lastEvent] and [buttons] let the PC recover lost button packets. */
         fun heartbeat(seq: Int, lastEvent: Int, buttons: Int): ByteArray =
