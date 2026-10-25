@@ -39,6 +39,7 @@ class ProtocolTest {
 
     @Test fun innerMessagesMatchDocumentedBytes() {
         assertArrayEquals(bytes(0x02, 0x05, 0x00, 0xFD, 0xFF), Protocol.Inner.move(5, -3))
+        assertArrayEquals(bytes(0x07, 0xFD, 0xFF, 0x78, 0x00), Protocol.Inner.scroll(-3, 120))
         assertArrayEquals(bytes(0x01, 0x2A, 0, 0, 0, 0x07, 0x00, 0x01), Protocol.Inner.heartbeat(42, 7, 1))
         assertArrayEquals(bytes(0x03, 0x07, 0x00, 0x01, 0x01), Protocol.Inner.button(7, Protocol.Button.RIGHT, true))
         assertArrayEquals(bytes(0x03, 0xFF, 0xFF, 0x00, 0x00), Protocol.Inner.button(0xFFFF, Protocol.Button.LEFT, false))

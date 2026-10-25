@@ -8,6 +8,8 @@ pub trait InputSink {
     fn set_button(&mut self, button: Button, pressed: bool);
     /// Presses the modifiers, taps the key, and releases everything again.
     fn key(&mut self, stroke: KeyStroke);
+    /// Turns the wheel: `dy > 0` up, `dx > 0` right, 120 per notch.
+    fn scroll(&mut self, dx: i32, dy: i32);
 }
 
 /// Injects input through the Win32 `SendInput` API, the same path a physical
@@ -77,6 +79,27 @@ impl InputSink for SystemInput {
 
     fn key(&mut self, stroke: KeyStroke) {
         send_inputs(&keyboard::inputs_for(stroke));
+    }
+
+    fn scroll(&mut self, dx: i32, dy: i32) {
+        use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
+            INPUT, INPUT_0, INPUT_MOUSE, MOUSEEVENTF_HWHEEL, MOUSEEVENTF_WHEEL, MOUSEINPUT,
+        };
+        let wheel = |amount: i32, flags: u32| INPUT {
+            r#type: INPUT_MOUSE,
+            Anonymous: INPUT_0 {
+                // The wheel amount is a signed value carried in mouseData.
+                mi: MOUSEINPUT { dx: 0, dy: 0, mouseData: amount as u32, dwFlags: flags, time: 0, dwExtraInfo: 0 },
+            },
+        };
+        let mut inputs = Vec::with_capacity(2);
+        if dy != 0 {
+            inputs.push(wheel(dy, MOUSEEVENTF_WHEEL));
+        }
+        if dx != 0 {
+            inputs.push(wheel(dx, MOUSEEVENTF_HWHEEL));
+        }
+        send_inputs(&inputs);
     }
 }
 
@@ -285,5 +308,9 @@ impl InputSink for SystemInput {
 
     fn key(&mut self, stroke: KeyStroke) {
         println!("key {:#04x} {:?}", stroke.mods, stroke.key);
+    }
+
+    fn scroll(&mut self, dx: i32, dy: i32) {
+        println!("scroll {dx} {dy}");
     }
 }

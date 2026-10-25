@@ -58,6 +58,7 @@ class TouchpadClient(private val store: PairingStore, private val phoneName: Str
 
     private sealed interface Msg {
         data class Move(val dx: Int, val dy: Int) : Msg
+        data class Scroll(val dx: Int, val dy: Int) : Msg
         class Button(val button: Protocol.Button, val pressed: Boolean) : Msg
         class Click(val button: Protocol.Button) : Msg
         class Key(val stroke: Protocol.KeyStroke) : Msg
@@ -84,6 +85,8 @@ class TouchpadClient(private val store: PairingStore, private val phoneName: Str
     // Sub-count remainders so slow finger movement isn't rounded away. UI thread only.
     private var remainderX = 0f
     private var remainderY = 0f
+    private var scrollRemainderX = 0f
+    private var scrollRemainderY = 0f
 
     fun start() {
         if (run != null) return
@@ -109,6 +112,20 @@ class TouchpadClient(private val store: PairingStore, private val phoneName: Str
         if (_state.value is State.Connected) {
             send(Msg.Move(ix.coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()),
                 iy.coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())))
+        }
+    }
+
+    /** Turns the PC's wheel, in wheel units: [dy] > 0 up, [dx] > 0 right. Fractions add up. */
+    fun scroll(dx: Float, dy: Float) {
+        scrollRemainderX += dx
+        scrollRemainderY += dy
+        val ix = scrollRemainderX.toInt()
+        val iy = scrollRemainderY.toInt()
+        if (ix == 0 && iy == 0) return
+        scrollRemainderX -= ix
+        scrollRemainderY -= iy
+        if (_state.value is State.Connected) {
+            send(Msg.Scroll(ix.coerceIn(-MAX_SCROLL, MAX_SCROLL), iy.coerceIn(-MAX_SCROLL, MAX_SCROLL)))
         }
     }
 
@@ -215,6 +232,7 @@ class TouchpadClient(private val store: PairingStore, private val phoneName: Str
             val now = SystemClock.elapsedRealtime()
             when (msg) {
                 is Msg.Move -> sendSecure(Protocol.Inner.move(msg.dx, msg.dy))
+                is Msg.Scroll -> sendSecure(Protocol.Inner.scroll(msg.dx, msg.dy))
                 is Msg.Button -> {
                     buttons = if (msg.pressed) buttons or msg.button.mask else buttons and msg.button.mask.inv()
                     eventId = (eventId + 1) and 0xFFFF
@@ -534,6 +552,8 @@ class TouchpadClient(private val store: PairingStore, private val phoneName: Str
         const val KEY_REPEAT_MS = 1_000L
         /** How long a tap-click holds the button down. */
         const val CLICK_HOLD_MS = 40L
+        /** Ten notches: more in one packet is never a real gesture. */
+        const val MAX_SCROLL = 1_200
     }
 }
 

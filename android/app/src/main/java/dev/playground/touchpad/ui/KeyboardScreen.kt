@@ -55,6 +55,7 @@ import kotlinx.coroutines.launch
 fun KeyboardScreen(
     state: TouchpadClient.State,
     onKey: (Protocol.KeyStroke) -> Unit,
+    onSettings: () -> Unit = {},
     keyboard: SpanishKeyboard = remember { SpanishKeyboard() },
 ) {
     // The keyboard's state isn't observable; bumping this redraws the labels.
@@ -79,7 +80,7 @@ fun KeyboardScreen(
             .windowInsetsPadding(WindowInsets.safeDrawing)
             .padding(horizontal = 6.dp, vertical = 4.dp),
     ) {
-        StatusLine(state, onUnpair = null)
+        StatusLine(state, onSettings = onSettings, onUnpair = null)
         Spacer(Modifier.height(2.dp))
         val looks = remember(version) { ROWS.map { row -> row.map { lookOf(it, keyboard) } } }
         ROWS.forEachIndexed { index, row ->
@@ -150,7 +151,7 @@ private fun KeyCap(
         else -> Palette.Surface
     }
     val textColor: Color = when {
-        lit -> Palette.Background
+        lit -> Palette.OnAccent
         key is KeyDef.Printable -> Palette.TextPrimary
         else -> Palette.TextMuted
     }

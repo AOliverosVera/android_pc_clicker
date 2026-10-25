@@ -13,6 +13,28 @@
     <string name="unpair_body">The phone and the PC will both forget each other. To use the touchpad again you will need to pair again.</string>
     <string name="unpair_confirm">Unpair</string>
 
+    <!-- Settings -->
+    <string name="settings_button">Settings</string>
+    <string name="settings_title">Settings</string>
+    <string name="settings_appearance">Appearance</string>
+    <string name="theme_dark">Dark</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_system">Like the phone</string>
+    <string name="settings_pointer">Pointer</string>
+    <string name="settings_pointer_speed">Speed</string>
+    <string name="settings_acceleration">Acceleration</string>
+    <string name="settings_off">Off</string>
+    <string name="settings_multiplier">%1$.1f×</string>
+    <string name="settings_scrolling">Scrolling</string>
+    <string name="settings_two_finger_direction">Two fingers: moving down scrolls the page</string>
+    <string name="settings_edge_scroll">Scroll along the right edge</string>
+    <string name="settings_edge_direction">Right edge: moving down scrolls the page</string>
+    <string name="settings_scrolls_up">Up</string>
+    <string name="settings_scrolls_down">Down</string>
+    <string name="settings_scroll_speed">Scroll speed</string>
+    <string name="settings_reset">Reset</string>
+    <string name="settings_done">Done</string>
+
     <!-- Pairing -->
     <string name="pair_title">Pair with your PC</string>
     <string name="pair_intro">Start Touchpad on your PC. It accepts new phones for 5 minutes after its first start, or after you choose Pair a new phone from its icon by the clock.</string>

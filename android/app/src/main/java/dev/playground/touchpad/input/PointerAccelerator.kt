@@ -10,6 +10,12 @@ package dev.playground.touchpad.input
 class PointerAccelerator {
     private var smoothedSpeed = 0f
 
+    /** Multiplies every movement (the "speed" slider). */
+    var speed = 1f
+
+    /** Scales how much extra fast movement gets (the "acceleration" slider); 0 is none. */
+    var acceleration = 1f
+
     fun reset() {
         smoothedSpeed = 0f
     }
@@ -20,7 +26,7 @@ class PointerAccelerator {
         val speed = kotlin.math.sqrt(dxDp * dxDp + dyDp * dyDp) / dt // dp per ms
         // Touch samples arrive unevenly; smoothing keeps the gain from flickering.
         smoothedSpeed += (speed - smoothedSpeed) * SMOOTHING
-        return gain(smoothedSpeed)
+        return this.speed * gain(smoothedSpeed, acceleration)
     }
 
     companion object {
@@ -32,10 +38,10 @@ class PointerAccelerator {
         const val FAST = 1.6f
         private const val SMOOTHING = 0.35f
 
-        fun gain(speedDpPerMs: Float): Float {
+        fun gain(speedDpPerMs: Float, acceleration: Float = 1f): Float {
             val t = ((speedDpPerMs - SLOW) / (FAST - SLOW)).coerceIn(0f, 1f)
             val eased = t * t * (3 - 2 * t) // smoothstep
-            return MIN_GAIN + (MAX_GAIN - MIN_GAIN) * eased
+            return MIN_GAIN + (MAX_GAIN - MIN_GAIN) * eased * acceleration
         }
     }
 }

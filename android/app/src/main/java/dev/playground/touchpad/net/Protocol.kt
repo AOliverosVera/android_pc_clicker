@@ -149,6 +149,7 @@ object Protocol {
         private const val BYE: Byte = 0x04
         private const val FORGET: Byte = 0x05
         private const val KEYS: Byte = 0x06
+        private const val SCROLL: Byte = 0x07
         private const val HEARTBEAT_ACK: Byte = 0x81.toByte()
 
         /** A KEYS message carries at most this many strokes. */
@@ -172,6 +173,9 @@ object Protocol {
             inner(HEARTBEAT, 7) { putInt(seq).putShort(lastEvent.toShort()).put(buttons.toByte()) }
 
         fun move(dx: Int, dy: Int): ByteArray = inner(MOVE, 4) { putShort(dx.toShort()).putShort(dy.toShort()) }
+
+        /** Mouse wheel in Windows units (120 = one notch): [dy] > 0 scrolls up, [dx] > 0 right. */
+        fun scroll(dx: Int, dy: Int): ByteArray = inner(SCROLL, 4) { putShort(dx.toShort()).putShort(dy.toShort()) }
 
         fun button(event: Int, button: Button, pressed: Boolean): ByteArray =
             inner(BUTTON, 4) { putShort(event.toShort()).put(button.wire).put(if (pressed) 1 else 0) }

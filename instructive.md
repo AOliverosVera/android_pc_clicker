@@ -127,8 +127,21 @@ You never have to do this again for this phone.
 | Left-click | Tap the big rectangle with one finger, or tap the **Left** button |
 | Right-click | Tap the big rectangle with two fingers at once, or tap the **Right** button |
 | Drag something | Hold **Left** with your thumb and slide another finger on the big rectangle |
+| Scroll | Slide **two fingers** up or down (or sideways) on the big rectangle |
+| Scroll (one finger) | Slide up or down along the **right edge** of the big rectangle (the slightly shaded strip) |
 
 Slow movements are precise; quick swipes travel further.
+
+### Settings
+
+Tap the **gear** at the top right. Changes apply right away:
+
+- **Appearance:** dark, light, or the same as your phone.
+- **Pointer:** speed, and acceleration (how much further quick swipes go;
+  slide it to the left end to turn it off).
+- **Scrolling:** which way the page moves for two-finger and right-edge
+  scrolling, whether the right edge scrolls at all, and scroll speed.
+  **Reset** puts pointer and scrolling back to the defaults.
 
 ### Using the keyboard
 

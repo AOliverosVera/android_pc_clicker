@@ -5,18 +5,28 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.graphics.toArgb
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
+import androidx.core.graphics.drawable.toDrawable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.playground.touchpad.settings.Theme
 import dev.playground.touchpad.ui.AppRoot
+import dev.playground.touchpad.ui.DarkColors
+import dev.playground.touchpad.ui.LightColors
+import dev.playground.touchpad.ui.TouchpadTheme
 
 class MainActivity : ComponentActivity() {
 
     private val client by lazy { (application as TouchpadApp).client }
+    private val settingsStore by lazy { (application as TouchpadApp).settings }
 
     private val notificationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* optional */ }
@@ -27,7 +37,23 @@ class MainActivity : ComponentActivity() {
         askForNotificationsOnce()
         setContent {
             val state by client.state.collectAsStateWithLifecycle()
-            AppRoot(state, client)
+            val settings by settingsStore.settings.collectAsStateWithLifecycle()
+            val dark = when (settings.theme) {
+                Theme.DARK -> true
+                Theme.LIGHT -> false
+                Theme.SYSTEM -> isSystemInDarkTheme()
+            }
+            val colors = if (dark) DarkColors else LightColors
+            LaunchedEffect(dark) {
+                // Status and navigation bar icons must contrast with the app's background.
+                val transparent = android.graphics.Color.TRANSPARENT
+                val style = if (dark) SystemBarStyle.dark(transparent) else SystemBarStyle.light(transparent, transparent)
+                enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
+                window.setBackgroundDrawable(colors.background.toArgb().toDrawable())
+            }
+            TouchpadTheme(colors) {
+                AppRoot(state, client, settings, onSettingsChange = { new -> settingsStore.update { new } })
+            }
         }
     }
 

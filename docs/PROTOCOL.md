@@ -106,6 +106,7 @@ Messages inside (the plaintext):
 | `04` | BYE | phone → PC | none: the app is disconnecting |
 | `05` | FORGET | phone → PC | none: unpaired on the phone, so the PC forgets it too |
 | `06` | KEYS | phone → PC | `first_event u16`, `count u8` (1–8), then `count` × (`mods u8`, `kind u8`, `code u32`) |
+| `07` | SCROLL | phone → PC | `dx i16`, `dy i16`: mouse wheel in Windows units (120 = one notch); `dy > 0` scrolls up, `dx > 0` scrolls right |
 | `81` | HEARTBEAT_ACK | PC → phone | `seq u32` (echoed) |
 
 KEYS fields:
@@ -147,8 +148,10 @@ truncated to 16 bytes.
 
 ## Behavior
 
-**Moves are best effort.** A lost MOVE loses a few pixels and never stalls
-later packets, which is why UDP is used.
+**Moves and scrolls are best effort.** A lost MOVE loses a few pixels (a
+lost SCROLL a little scrolling) and never stalls later packets, which is why
+UDP is used. SCROLL carries amounts smaller than a notch, so apps that
+support it scroll smoothly; the phone sends at most ±1200 per message.
 
 **Clicks are reliable.** The phone sends every BUTTON three times (now, +20 ms,
 +60 ms), each sealed as a new packet. The PC applies a BUTTON only if `event`

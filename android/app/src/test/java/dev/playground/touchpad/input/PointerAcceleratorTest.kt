@@ -39,6 +39,17 @@ class PointerAcceleratorTest {
         assertEquals(PointerAccelerator.MIN_GAIN, accelerator.gainFor(0.1f, 0f, 8), 0.0001f)
     }
 
+    @Test fun accelerationZeroKeepsTheSameGainAtAnySpeed() {
+        assertEquals(PointerAccelerator.MIN_GAIN, PointerAccelerator.gain(5f, acceleration = 0f), 0.0001f)
+        val doubled = PointerAccelerator.gain(5f, acceleration = 2f)
+        assertEquals(PointerAccelerator.MIN_GAIN + 2 * (PointerAccelerator.MAX_GAIN - PointerAccelerator.MIN_GAIN), doubled, 0.0001f)
+    }
+
+    @Test fun speedScalesEveryMovement() {
+        val accelerator = PointerAccelerator().apply { speed = 2f }
+        assertEquals(2 * PointerAccelerator.MIN_GAIN, accelerator.gainFor(0.1f, 0f, 8), 0.0001f)
+    }
+
     @Test fun zeroOrHugeTimeStepsAreClamped() {
         val accelerator = PointerAccelerator()
         val gain = accelerator.gainFor(1f, 1f, dtMs = 0)

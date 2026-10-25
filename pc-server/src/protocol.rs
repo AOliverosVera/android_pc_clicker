@@ -313,6 +313,9 @@ pub enum Inner {
     /// The phone's most recent key presses, oldest first, with consecutive
     /// event ids starting at `first_event`. Each one is typed once.
     Keys { first_event: u16, strokes: Vec<KeyStroke> },
+    /// Mouse wheel, in Windows wheel units (120 = one notch; smaller steps
+    /// scroll smoothly). `dy > 0` scrolls up, `dx > 0` scrolls right.
+    Scroll { dx: i16, dy: i16 },
     HeartbeatAck { seq: u32 },
 }
 
@@ -323,6 +326,7 @@ mod it {
     pub const BYE: u8 = 0x04;
     pub const FORGET: u8 = 0x05;
     pub const KEYS: u8 = 0x06;
+    pub const SCROLL: u8 = 0x07;
     pub const HEARTBEAT_ACK: u8 = 0x81;
 }
 
@@ -360,6 +364,10 @@ impl Inner {
                 let strokes = (0..count).map(|_| r.key_stroke()).collect::<Option<Vec<_>>>()?;
                 Inner::Keys { first_event, strokes }
             }
+            it::SCROLL => Inner::Scroll {
+                dx: i16::from_le_bytes(r.array()?),
+                dy: i16::from_le_bytes(r.array()?),
+            },
             it::HEARTBEAT_ACK => Inner::HeartbeatAck { seq: u32::from_le_bytes(r.array()?) },
             _ => return None,
         })
@@ -399,6 +407,11 @@ impl Inner {
                     out.extend_from_slice(&[stroke.mods, kind]);
                     out.extend_from_slice(&code.to_le_bytes());
                 }
+            }
+            Inner::Scroll { dx, dy } => {
+                out.push(it::SCROLL);
+                out.extend_from_slice(&dx.to_le_bytes());
+                out.extend_from_slice(&dy.to_le_bytes());
             }
             Inner::HeartbeatAck { seq } => {
                 out.push(it::HEARTBEAT_ACK);
@@ -614,11 +627,14 @@ mod tests {
                     KeyStroke { mods: 0, key: Key::Text('\u{1F600}') },
                 ],
             },
+            Inner::Scroll { dx: -3, dy: 120 },
             Inner::HeartbeatAck { seq: 42 },
         ] {
             assert_eq!(Inner::decode(&m.encode()), Some(m));
         }
         assert_eq!(Inner::Move { dx: 5, dy: -3 }.encode(), vec![0x02, 0x05, 0x00, 0xFD, 0xFF]);
+        assert_eq!(Inner::Scroll { dx: -3, dy: 120 }.encode(), vec![0x07, 0xFD, 0xFF, 0x78, 0x00]);
+        assert_eq!(Inner::decode(&[0x07, 0x00, 0x00, 0x78]), None); // truncated
         assert_eq!(
             Inner::Heartbeat { seq: 42, last_event: 7, buttons: 1 }.encode(),
             vec![0x01, 0x2A, 0x00, 0x00, 0x00, 0x07, 0x00, 0x01]

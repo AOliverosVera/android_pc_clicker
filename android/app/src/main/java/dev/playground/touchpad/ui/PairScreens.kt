@@ -87,7 +87,7 @@ fun PairScreen(pcs: List<FoundPc>, onPair: (FoundPc) -> Unit) = Page {
                 Button(
                     onClick = { onPair(pc) },
                     enabled = pc.pairingOpen,
-                    colors = ButtonDefaults.buttonColors(containerColor = Palette.Accent, contentColor = Palette.Background),
+                    colors = ButtonDefaults.buttonColors(containerColor = Palette.Accent, contentColor = Palette.OnAccent),
                 ) { Text(stringResource(R.string.pair_button)) }
             }
         }
@@ -124,7 +124,7 @@ fun PairingScreen(pcName: String, step: PairingStep, onConfirm: () -> Unit, onCa
             Button(
                 onClick = onConfirm,
                 modifier = Modifier.fillMaxWidth().height(52.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Palette.Accent, contentColor = Palette.Background),
+                colors = ButtonDefaults.buttonColors(containerColor = Palette.Accent, contentColor = Palette.OnAccent),
             ) { Text(stringResource(R.string.pairing_codes_match)) }
             Spacer(Modifier.height(8.dp))
             CancelButton(onCancel)

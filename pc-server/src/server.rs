@@ -392,6 +392,11 @@ impl<S: InputSink> Server<S> {
                 sink.move_relative(dx as i32, dy as i32);
                 None
             }
+            // Best effort, like moves: a lost packet loses a little scrolling.
+            Inner::Scroll { dx, dy } => {
+                sink.scroll(dx as i32, dy as i32);
+                None
+            }
             Inner::Button { event, button, pressed } => {
                 // Each button event is sent several times; only the first copy counts.
                 if session.last_event.is_none_or(|last| is_newer(event, last)) {
@@ -503,6 +508,9 @@ mod tests {
                 Key::Special(s) => format!("{s:?}"),
             };
             self.0.push(if stroke.mods == 0 { key } else { format!("{}+{key}", stroke.mods) });
+        }
+        fn scroll(&mut self, dx: i32, dy: i32) {
+            self.0.push(format!("scroll {dx} {dy}"));
         }
     }
 
@@ -910,6 +918,16 @@ mod tests {
         assert!(s.store().phones().is_empty());
         assert!(s.sink().0.ends_with(&["Left up".to_string()]), "buttons released");
         assert!(s.handle(&phone.hello_packet([1; 16]), addr(), now).is_none());
+    }
+
+    // --- scrolling
+
+    #[test]
+    fn scroll_turns_the_wheel() {
+        let (mut s, mut phone, now) = connected();
+        phone.send(&mut s, Inner::Scroll { dx: 0, dy: 40 }, now);
+        phone.send(&mut s, Inner::Scroll { dx: -15, dy: -120 }, now);
+        assert_eq!(s.sink().0, vec!["scroll 0 40", "scroll -15 -120"]);
     }
 
     // --- keyboard
