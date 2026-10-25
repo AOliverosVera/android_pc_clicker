@@ -59,6 +59,7 @@ class TouchpadClient(private val store: PairingStore, private val phoneName: Str
     private sealed interface Msg {
         data class Move(val dx: Int, val dy: Int) : Msg
         class Button(val button: Protocol.Button, val pressed: Boolean) : Msg
+        class Click(val button: Protocol.Button) : Msg
         class Key(val stroke: Protocol.KeyStroke) : Msg
         /** A repeat copy; dropped if the session changed since the original. */
         class Resend(val plaintext: ByteArray, val channel: SecureChannel?) : Msg
@@ -112,6 +113,9 @@ class TouchpadClient(private val store: PairingStore, private val phoneName: Str
     }
 
     fun setButton(button: Protocol.Button, pressed: Boolean) = send(Msg.Button(button, pressed))
+
+    /** A complete click (press and release), as from tapping the touchpad. */
+    fun click(button: Protocol.Button) = send(Msg.Click(button))
 
     /** Types one key on the PC. Ignored while not connected, so nothing typed
      *  offline is replayed later. */
@@ -215,6 +219,17 @@ class TouchpadClient(private val store: PairingStore, private val phoneName: Str
                     buttons = if (msg.pressed) buttons or msg.button.mask else buttons and msg.button.mask.inv()
                     eventId = (eventId + 1) and 0xFFFF
                     sendWithCopies(Protocol.Inner.button(eventId, msg.button, msg.pressed))
+                }
+                // Ignored while that button is held (e.g. mid-drag), so a tap
+                // can't release it.
+                is Msg.Click -> if (buttons and msg.button.mask == 0) {
+                    handle(Msg.Button(msg.button, true))
+                    // Released a little later, so a copy of the press always
+                    // arrives before the release even if the first is lost.
+                    r.scope.launch {
+                        delay(CLICK_HOLD_MS)
+                        r.control.trySend(Msg.Button(msg.button, false))
+                    }
                 }
                 is Msg.Key -> if (channel != null) {
                     keyEventId = (keyEventId + 1) and 0xFFFF
@@ -517,6 +532,8 @@ class TouchpadClient(private val store: PairingStore, private val phoneName: Str
         const val PAIRING_TIMEOUT_MS = 120_000L
         /** How long a key keeps being repeated in later KEYS packets. */
         const val KEY_REPEAT_MS = 1_000L
+        /** How long a tap-click holds the button down. */
+        const val CLICK_HOLD_MS = 40L
     }
 }
 

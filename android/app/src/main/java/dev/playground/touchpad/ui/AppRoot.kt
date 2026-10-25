@@ -25,6 +25,7 @@ fun AppRoot(state: State, client: TouchpadClient) {
                     state = state,
                     onMove = client::move,
                     onButton = client::setButton,
+                    onClick = client::click,
                     onUnpair = client::unpair,
                 )
             }

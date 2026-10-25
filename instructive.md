@@ -124,8 +124,8 @@ You never have to do this again for this phone.
 | To… | Do this |
 |---|---|
 | Move the pointer | Slide one finger on the big rectangle |
-| Left-click | Tap the **Left** button |
-| Right-click | Tap the **Right** button |
+| Left-click | Tap the big rectangle with one finger, or tap the **Left** button |
+| Right-click | Tap the big rectangle with two fingers at once, or tap the **Right** button |
 | Drag something | Hold **Left** with your thumb and slide another finger on the big rectangle |
 
 Slow movements are precise; quick swipes travel further.

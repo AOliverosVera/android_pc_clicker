@@ -36,6 +36,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerInputChange
+import androidx.compose.ui.input.pointer.changedToDownIgnoreConsumed
+import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalView
@@ -45,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.playground.touchpad.R
 import dev.playground.touchpad.input.PointerAccelerator
+import dev.playground.touchpad.input.TapDetector
 import dev.playground.touchpad.net.Protocol
 import dev.playground.touchpad.net.TouchpadClient
 
@@ -54,6 +57,7 @@ fun TouchpadScreen(
     state: TouchpadClient.State,
     onMove: (dx: Float, dy: Float) -> Unit,
     onButton: (Protocol.Button, pressed: Boolean) -> Unit,
+    onClick: (Protocol.Button) -> Unit,
     onUnpair: () -> Unit,
 ) {
     var confirmUnpair by remember { mutableStateOf(false) }
@@ -82,7 +86,7 @@ fun TouchpadScreen(
     ) {
         StatusLine(state, onUnpair = { confirmUnpair = true })
         Spacer(Modifier.height(12.dp))
-        Touchpad(onMove, Modifier.weight(1f).fillMaxWidth())
+        Touchpad(onMove, onClick, Modifier.weight(1f).fillMaxWidth())
         Spacer(Modifier.height(12.dp))
         Row(
             Modifier.fillMaxWidth().height(96.dp),
@@ -133,21 +137,39 @@ internal fun StatusLine(state: TouchpadClient.State, onUnpair: (() -> Unit)?) {
 /**
  * Follows one finger and reports its movement. If that finger lifts while
  * another is still down, tracking hands over to the other finger without a jump.
+ * A quick tap clicks: one finger left, two fingers right.
  */
 @Composable
-private fun Touchpad(onMove: (Float, Float) -> Unit, modifier: Modifier) {
+private fun Touchpad(onMove: (Float, Float) -> Unit, onClick: (Protocol.Button) -> Unit, modifier: Modifier) {
     val currentOnMove by rememberUpdatedState(onMove)
+    val currentOnClick by rememberUpdatedState(onClick)
+    val view = LocalView.current
     val accelerator = remember { PointerAccelerator() }
     Box(
         modifier
             .clip(RoundedCornerShape(20.dp))
             .background(Palette.Surface)
             .pointerInput(Unit) {
+                val taps = TapDetector(slopPx = viewConfiguration.touchSlop)
                 awaitEachGesture {
-                    var tracked = awaitFirstDown(requireUnconsumed = false).id
+                    val first = awaitFirstDown(requireUnconsumed = false)
+                    var tracked = first.id
                     accelerator.reset()
+                    taps.cancel() // in case the previous touch was interrupted
+                    taps.onDown(first.id.value, first.position.x, first.position.y, first.uptimeMillis)
                     while (true) {
                         val event = awaitPointerEvent()
+                        for (c in event.changes) {
+                            when {
+                                c.changedToDownIgnoreConsumed() ->
+                                    taps.onDown(c.id.value, c.position.x, c.position.y, c.uptimeMillis)
+                                c.changedToUpIgnoreConsumed() -> taps.onUp(c.id.value, c.uptimeMillis)?.let { tap ->
+                                    view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                                    currentOnClick(if (tap == TapDetector.Tap.LEFT) Protocol.Button.LEFT else Protocol.Button.RIGHT)
+                                }
+                                c.pressed -> taps.onMove(c.id.value, c.position.x, c.position.y)
+                            }
+                        }
                         val change: PointerInputChange = event.changes.firstOrNull { it.id == tracked && it.pressed }
                             ?: event.changes.firstOrNull { it.pressed }?.also { tracked = it.id }
                             ?: break
