@@ -73,6 +73,7 @@ tasks.withType<Test>().configureEach {
         outputs.upToDateWhen { false }
     }
     providers.gradleProperty("touchpadInteropCodeFile").orNull?.let { systemProperty("touchpad.interop.codefile", it) }
+    providers.gradleProperty("touchpadInteropPort").orNull?.let { systemProperty("touchpad.interop.port", it) }
 }
 
 dependencies {

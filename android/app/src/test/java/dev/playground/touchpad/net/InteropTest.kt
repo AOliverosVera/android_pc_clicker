@@ -21,10 +21,11 @@ import java.net.SocketTimeoutException
 class InteropTest {
     private val host: String? = System.getProperty("touchpad.interop.host")
     private val codeFile: String? = System.getProperty("touchpad.interop.codefile")
+    private val port: Int = System.getProperty("touchpad.interop.port")?.toIntOrNull() ?: Protocol.PORT
 
     @Test fun pairConnectAndDriveTheRealServer() {
         assumeTrue("set -PtouchpadInteropHost to run", host != null)
-        val pc = InetSocketAddress(host, Protocol.PORT)
+        val pc = InetSocketAddress(host, port)
         DatagramSocket().use { socket ->
             socket.soTimeout = 300
             fun send(bytes: ByteArray) = socket.send(DatagramPacket(bytes, bytes.size, pc))

@@ -2,6 +2,7 @@ package dev.playground.touchpad.settings
 
 import android.content.SharedPreferences
 import androidx.core.content.edit
+import dev.playground.touchpad.input.DragLock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -27,6 +28,12 @@ data class Settings(
     val twoFingerDownScrollsUp: Boolean = true,
     val edgeScroll: Boolean = true,
     val edgeDownScrollsUp: Boolean = false,
+    /** Tap, then touch again and move, to drag (on by default, as on Windows and Linux). */
+    val tapToDrag: Boolean = true,
+    /** Whether a drag survives lifting the finger (off by default, as on Linux). */
+    val dragLock: DragLock = DragLock.OFF,
+    /** Move three fingers to drag (macOS style; off by default, as on macOS). */
+    val threeFingerDrag: Boolean = false,
 ) {
     companion object {
         val POINTER_SPEED = 0.4f..2.5f
@@ -51,6 +58,9 @@ class SettingsStore(private val prefs: SharedPreferences) {
             putBoolean(TWO_FINGER_UP, next.twoFingerDownScrollsUp)
             putBoolean(EDGE_SCROLL, next.edgeScroll)
             putBoolean(EDGE_UP, next.edgeDownScrollsUp)
+            putBoolean(TAP_TO_DRAG, next.tapToDrag)
+            putString(DRAG_LOCK, next.dragLock.name)
+            putBoolean(THREE_FINGER_DRAG, next.threeFingerDrag)
         }
     }
 
@@ -65,6 +75,9 @@ class SettingsStore(private val prefs: SharedPreferences) {
             twoFingerDownScrollsUp = prefs.getBoolean(TWO_FINGER_UP, d.twoFingerDownScrollsUp),
             edgeScroll = prefs.getBoolean(EDGE_SCROLL, d.edgeScroll),
             edgeDownScrollsUp = prefs.getBoolean(EDGE_UP, d.edgeDownScrollsUp),
+            tapToDrag = prefs.getBoolean(TAP_TO_DRAG, d.tapToDrag),
+            dragLock = DragLock.entries.firstOrNull { it.name == prefs.getString(DRAG_LOCK, null) } ?: d.dragLock,
+            threeFingerDrag = prefs.getBoolean(THREE_FINGER_DRAG, d.threeFingerDrag),
         )
     }
 
@@ -76,5 +89,8 @@ class SettingsStore(private val prefs: SharedPreferences) {
         const val TWO_FINGER_UP = "two_finger_down_scrolls_up"
         const val EDGE_SCROLL = "edge_scroll"
         const val EDGE_UP = "edge_down_scrolls_up"
+        const val TAP_TO_DRAG = "tap_to_drag"
+        const val DRAG_LOCK = "drag_lock"
+        const val THREE_FINGER_DRAG = "three_finger_drag"
     }
 }

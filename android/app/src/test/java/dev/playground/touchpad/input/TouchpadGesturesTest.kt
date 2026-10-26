@@ -100,4 +100,44 @@ class TouchpadGesturesTest {
         assertEquals(Mode.POINTER, g.mode)
         assertEquals(Motion(moveX = 4f, moveY = 0f), g.update(listOf(f(3, 104f, 100f))))
     }
+
+    @Test fun pointerOnlyTouchNeverScrollsEvenWithASecondFinger() {
+        g.start(1, 100f, 100f, width, edgeScroll = true, pointerOnly = true)
+        g.update(listOf(f(1, 100f, 100f), f(2, 150f, 100f)))
+        assertEquals(Mode.POINTER, g.mode)
+        assertEquals(Motion(moveX = 0f, moveY = 20f), g.update(listOf(f(1, 100f, 120f), f(2, 150f, 120f))))
+    }
+
+    @Test fun pointerOnlyTouchIgnoresTheEdgeStrip() {
+        g.start(1, 290f, 100f, width, edgeScroll = true, pointerOnly = true)
+        assertEquals(Mode.POINTER, g.mode)
+    }
+
+    @Test fun threeFingersMovingPastTheSlopStartADrag() {
+        g.start(1, 100f, 100f, width, edgeScroll = true, threeFingerDrag = true)
+        g.update(listOf(f(1, 100f, 100f), f(2, 130f, 100f), f(3, 160f, 100f)))
+        assertEquals(Mode.THREE_FINGER_PENDING, g.mode)
+        assertEquals(Motion.NONE, g.update(listOf(f(1, 104f, 100f), f(2, 134f, 100f), f(3, 164f, 100f))))
+        // Past the slop: the pointer moves by everything so far, as a drag.
+        assertEquals(Motion(moveX = 10f), g.update(listOf(f(1, 110f, 100f), f(2, 140f, 100f), f(3, 170f, 100f))))
+        assertEquals(Mode.THREE_FINGER_DRAG, g.mode)
+        // Lifting a finger mid-drag re-centres without a jump, then keeps dragging.
+        assertEquals(Motion.NONE, g.update(listOf(f(1, 110f, 100f), f(2, 140f, 100f), f(3, 170f, 100f, down = false))))
+        assertEquals(Motion(moveY = 5f), g.update(listOf(f(1, 110f, 105f), f(2, 140f, 105f))))
+    }
+
+    @Test fun threeFingersScrollWhenThreeFingerDragIsOff() {
+        g.start(1, 100f, 100f, width, edgeScroll = true)
+        g.update(listOf(f(1, 100f, 100f), f(2, 130f, 100f), f(3, 160f, 100f)))
+        assertEquals(Mode.TWO_FINGER_PENDING, g.mode)
+    }
+
+    @Test fun aThirdFingerDoesNotInterruptAScrollAlreadyUnderway() {
+        g.start(1, 100f, 100f, width, edgeScroll = true, threeFingerDrag = true)
+        g.update(listOf(f(1, 100f, 100f), f(2, 150f, 100f)))
+        g.update(listOf(f(1, 100f, 120f), f(2, 150f, 120f)))
+        assertEquals(Mode.TWO_FINGER_SCROLL, g.mode)
+        g.update(listOf(f(1, 100f, 120f), f(2, 150f, 120f), f(3, 200f, 120f)))
+        assertEquals(Mode.TWO_FINGER_SCROLL, g.mode)
+    }
 }

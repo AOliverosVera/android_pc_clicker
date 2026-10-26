@@ -126,11 +126,18 @@ You never have to do this again for this phone.
 | Move the pointer | Slide one finger on the big rectangle |
 | Left-click | Tap the big rectangle with one finger, or tap the **Left** button |
 | Right-click | Tap the big rectangle with two fingers at once, or tap the **Right** button |
-| Drag something | Hold **Left** with your thumb and slide another finger on the big rectangle |
+| Drag something (move an icon, resize or move a window, select text) | **Tap, then touch again and slide**: tap once, put your finger straight back down, and move it. Lift your finger to drop. |
+| …or | Hold **Left** with your thumb and slide another finger on the big rectangle |
+| Double-click | Tap twice quickly |
 | Scroll | Slide **two fingers** up or down (or sideways) on the big rectangle |
 | Scroll (one finger) | Slide up or down along the **right edge** of the big rectangle (the slightly shaded strip) |
 
-Slow movements are precise; quick swipes travel further.
+Slow movements are precise; quick swipes travel further. When a drag starts,
+the phone gives a short buzz so you know the item is "picked up".
+
+**Long drags:** if your finger reaches the edge of the screen in the middle of
+a drag, turn on **drag lock** in Settings. Then you can lift your finger,
+put it back down and keep going; tap once to drop.
 
 ### Settings
 
@@ -141,7 +148,17 @@ Tap the **gear** at the top right. Changes apply right away:
   slide it to the left end to turn it off).
 - **Scrolling:** which way the page moves for two-finger and right-edge
   scrolling, whether the right edge scrolls at all, and scroll speed.
-  **Reset** puts pointer and scrolling back to the defaults.
+- **Dragging:**
+  - *Tap, then touch again and move to drag*: on by default. Turn it off if
+    you only ever drag with the **Left** button; single taps then click a
+    fraction of a second sooner.
+  - *Drag with three fingers*: put three fingers down and move them to drag,
+    no tap needed (like on a Mac).
+  - *When you lift your finger during a drag*: **Drop** (normal), **Wait a
+    moment** (you have about half a second to put the finger back), or **Hold
+    until a tap** (the drag continues until you tap once).
+
+**Reset** puts pointer, scrolling and dragging back to the defaults.
 
 ### Using the keyboard
 

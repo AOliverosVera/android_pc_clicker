@@ -16,7 +16,9 @@ class TapDetector(private val slopPx: Float, private val maxDurationMs: Long = 2
     private val down = HashSet<Long>()
     private var startedAt = 0L
     private var mostFingers = 0
-    private var moved = false
+    /** True once any finger of the current touch slid further than the slop. */
+    var moved = false
+        private set
 
     fun onDown(id: Long, x: Float, y: Float, time: Long) {
         if (down.isEmpty()) {

@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import dev.playground.touchpad.R
+import dev.playground.touchpad.input.DragLock
 import dev.playground.touchpad.settings.Settings
 import dev.playground.touchpad.settings.Theme
 
@@ -104,6 +105,31 @@ private fun SettingsPanel(settings: Settings, onChange: (Settings) -> Unit, onDi
                 shown = stringResource(R.string.settings_multiplier, settings.scrollSpeed),
                 onChange = { onChange(settings.copy(scrollSpeed = it)) },
             )
+
+            Section(stringResource(R.string.settings_dragging))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Label(stringResource(R.string.settings_tap_to_drag), Modifier.weight(1f))
+                Switch(checked = settings.tapToDrag, onCheckedChange = { onChange(settings.copy(tapToDrag = it)) })
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Label(stringResource(R.string.settings_three_finger_drag), Modifier.weight(1f))
+                Switch(checked = settings.threeFingerDrag, onCheckedChange = { onChange(settings.copy(threeFingerDrag = it)) })
+            }
+            if (settings.tapToDrag || settings.threeFingerDrag) {
+                Spacer(Modifier.height(8.dp))
+                Label(stringResource(R.string.settings_drag_lock))
+                Choices(
+                    options = listOf(
+                        DragLock.OFF to stringResource(R.string.drag_lock_off),
+                        DragLock.TIMEOUT to stringResource(R.string.drag_lock_timeout),
+                        DragLock.STICKY to stringResource(R.string.drag_lock_sticky),
+                    ),
+                    selected = settings.dragLock,
+                    onSelect = { onChange(settings.copy(dragLock = it)) },
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(stringResource(R.string.settings_drag_hint), color = Palette.TextMuted, fontSize = 12.sp)
 
             Spacer(Modifier.height(12.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {

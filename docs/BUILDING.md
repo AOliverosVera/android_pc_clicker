@@ -139,9 +139,9 @@ the project folder, because the firewall rule names the exact `.exe` path.
 
 | Suite | Command | Covers |
 |---|---|---|
-| Server, 52 tests | `cd pc-server; cargo test` | protocol layouts and malformed input; crypto against RFC and shared vectors; ECDH point validation; AES-GCM channel (replay, every single-bit flip, wrong key/session, reflection); pairing (success, rejection, wrong key, conflicting data, timeout, busy, closed); sessions (forged/unknown HELLO, retransmission, limits, replacement); click de-duplication and recovery; timeouts; revocation; DPAPI store |
-| App, 26 tests | `cd android; .\gradlew.bat test` | the same layouts, crypto vectors, ECDH point validation, AES-GCM channel properties, acceleration curve |
-| End to end | `.\scripts\interop-test.ps1` | the app's protocol code pairs with the real server binary over UDP, confirming the pairing only if both sides computed the same code; then a forged HELLO, a replay, input and unpairing |
+| Server, 63 tests | `cd pc-server; cargo test` | protocol layouts and malformed input; crypto against RFC and shared vectors; ECDH point validation; AES-GCM channel (replay, every single-bit flip, wrong key/session, reflection); pairing (success, rejection, wrong key, conflicting data, timeout, busy, closed); sessions (forged/unknown HELLO, retransmission, limits, replacement); click de-duplication and recovery; timeouts; revocation; DPAPI store |
+| App, 84 tests | `cd android; .\gradlew.bat test` | the same layouts, crypto vectors, ECDH point validation, AES-GCM channel properties, keyboard, tap detection, scrolling and dragging gestures, the tap-and-drag / drag-lock state machine, acceleration curve |
+| End to end | `.\scripts\interop-test.ps1` (uses port 47899, so it runs even while your own server is on) | the app's protocol code pairs with the real server binary over UDP, confirming the pairing only if both sides computed the same code; then a forged HELLO, a replay, input and unpairing |
 | Lint | `cargo clippy --all-targets`, `.\gradlew.bat lintRelease` | 0 warnings / no issues |
 | Vulnerabilities | `cd pc-server; cargo audit` | Rust crates against the RustSec database |
 

@@ -19,7 +19,9 @@ New-Item -ItemType Directory $tmp | Out-Null
 $codeFile = Join-Path $tmp "phone-code.txt"
 $gradleLog = Join-Path $tmp "gradle.log"
 
-$psi = New-Object Diagnostics.ProcessStartInfo $exe, "--pair --data-dir `"$tmp`""
+# A spare port, so the test also runs while your own Touchpad server is using 47820.
+$port = 47899
+$psi = New-Object Diagnostics.ProcessStartInfo $exe, "--pair --port $port --data-dir `"$tmp`""
 $psi.UseShellExecute = $false
 $psi.RedirectStandardInput = $true
 $psi.RedirectStandardOutput = $true
@@ -30,7 +32,7 @@ try {
     $androidDir = Join-Path $root "android"
     $gradle = Start-Process -FilePath (Join-Path $androidDir "gradlew.bat") -WorkingDirectory $androidDir -PassThru -NoNewWindow `
         -RedirectStandardOutput $gradleLog `
-        -ArgumentList "testDebugUnitTest", "--tests", "dev.playground.touchpad.net.InteropTest", "-PtouchpadInteropHost=127.0.0.1", "-PtouchpadInteropCodeFile=$codeFile"
+        -ArgumentList "testDebugUnitTest", "--tests", "dev.playground.touchpad.net.InteropTest", "-PtouchpadInteropHost=127.0.0.1", "-PtouchpadInteropPort=$port", "-PtouchpadInteropCodeFile=$codeFile"
     $null = $gradle.Handle # Windows PowerShell only records ExitCode if the handle was opened
 
     $serverCode = $null

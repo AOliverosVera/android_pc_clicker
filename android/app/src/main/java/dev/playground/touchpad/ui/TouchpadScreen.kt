@@ -1,5 +1,6 @@
 package dev.playground.touchpad.ui
 
+import android.os.SystemClock
 import android.view.HapticFeedbackConstants
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
@@ -30,9 +31,11 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -49,12 +52,17 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.playground.touchpad.R
+import dev.playground.touchpad.input.ButtonHolds
 import dev.playground.touchpad.input.PointerAccelerator
 import dev.playground.touchpad.input.TapDetector
+import dev.playground.touchpad.input.TapDrag
 import dev.playground.touchpad.input.TouchpadGestures
 import dev.playground.touchpad.settings.Settings
 import dev.playground.touchpad.net.Protocol
 import dev.playground.touchpad.net.TouchpadClient
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /** Shown once paired: [state] is Searching or Connected. */
 @Composable
@@ -69,6 +77,17 @@ fun TouchpadScreen(
     onUnpair: () -> Unit,
 ) {
     var confirmUnpair by remember { mutableStateOf(false) }
+    // The on-screen Left button and touchpad drags can both hold the left
+    // button; the PC sees one press and one release, so neither cancels the other.
+    val currentOnButton by rememberUpdatedState(onButton)
+    val leftHolds = remember { ButtonHolds() }
+    val holdLeft = { who: String, held: Boolean ->
+        if (held) {
+            if (leftHolds.hold(who)) currentOnButton(Protocol.Button.LEFT, true)
+        } else if (leftHolds.release(who)) {
+            currentOnButton(Protocol.Button.LEFT, false)
+        }
+    }
     if (confirmUnpair) {
         AlertDialog(
             onDismissRequest = { confirmUnpair = false },
@@ -94,14 +113,14 @@ fun TouchpadScreen(
     ) {
         StatusLine(state, onSettings = onSettings, onUnpair = { confirmUnpair = true })
         Spacer(Modifier.height(12.dp))
-        Touchpad(settings, onMove, onScroll, onClick, Modifier.weight(1f).fillMaxWidth())
+        Touchpad(settings, onMove, onScroll, onClick, { held -> holdLeft("touchpad", held) }, Modifier.weight(1f).fillMaxWidth())
         Spacer(Modifier.height(12.dp))
         Row(
             Modifier.fillMaxWidth().height(96.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            ClickButton(Protocol.Button.LEFT, stringResource(R.string.button_left), onButton, Modifier.weight(1f))
-            ClickButton(Protocol.Button.RIGHT, stringResource(R.string.button_right), onButton, Modifier.weight(1f))
+            ClickButton(stringResource(R.string.button_left), { held -> holdLeft("button", held) }, Modifier.weight(1f))
+            ClickButton(stringResource(R.string.button_right), { held -> onButton(Protocol.Button.RIGHT, held) }, Modifier.weight(1f))
         }
     }
 }
@@ -153,6 +172,8 @@ internal fun StatusLine(state: TouchpadClient.State, onSettings: () -> Unit, onU
  * The touchpad surface. One finger moves the pointer, two fingers scroll, and
  * (if enabled) a finger sliding along the right-edge strip scrolls; see
  * [TouchpadGestures]. A quick tap clicks: one finger left, two fingers right.
+ * Tap-and-drag, drag lock and three-finger drag hold the left button through
+ * [onLeftHold]; see [TapDrag].
  */
 @Composable
 private fun Touchpad(
@@ -160,14 +181,57 @@ private fun Touchpad(
     onMove: (Float, Float) -> Unit,
     onScroll: (Float, Float) -> Unit,
     onClick: (Protocol.Button) -> Unit,
+    onLeftHold: (Boolean) -> Unit,
     modifier: Modifier,
 ) {
     val currentSettings by rememberUpdatedState(settings)
     val currentOnMove by rememberUpdatedState(onMove)
     val currentOnScroll by rememberUpdatedState(onScroll)
     val currentOnClick by rememberUpdatedState(onClick)
+    val currentOnLeftHold by rememberUpdatedState(onLeftHold)
     val view = LocalView.current
     val accelerator = remember { PointerAccelerator() }
+    val drag = remember { TapDrag() }
+    val scope = rememberCoroutineScope()
+    val timer = remember { TimerSlot() }
+
+    fun perform(actions: List<TapDrag.Action>) {
+        for (action in actions) when (action) {
+            TapDrag.Action.LEFT_DOWN -> currentOnLeftHold(true)
+            TapDrag.Action.LEFT_UP -> currentOnLeftHold(false)
+            TapDrag.Action.LEFT_CLICK -> currentOnClick(Protocol.Button.LEFT)
+            TapDrag.Action.RIGHT_CLICK -> currentOnClick(Protocol.Button.RIGHT)
+        }
+    }
+
+    // Runs one TapDrag step and buzzes when a drag starts, so the user feels the item being picked up.
+    fun step(step: () -> List<TapDrag.Action>) {
+        val wasDragging = drag.dragging
+        perform(step())
+        if (!wasDragging && drag.dragging) view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+    }
+
+    // Fires TapDrag.onTimeout at its deadline. Timers run on the same thread
+    // as the touch handling, so the two never race.
+    fun reschedule() {
+        timer.job?.cancel()
+        val due = drag.deadline ?: return
+        timer.job = scope.launch {
+            delay((due - SystemClock.uptimeMillis()).coerceAtLeast(0))
+            step { drag.onTimeout(SystemClock.uptimeMillis()) }
+            reschedule()
+        }
+    }
+
+    // Leaving the touchpad (rotating to the keyboard, closing the app) must
+    // never leave the button held on the PC.
+    DisposableEffect(Unit) {
+        onDispose {
+            timer.job?.cancel()
+            perform(drag.cancel())
+        }
+    }
+
     BoxWithConstraints(
         modifier
             .clip(RoundedCornerShape(20.dp))
@@ -182,6 +246,10 @@ private fun Touchpad(
                     accelerator.reset()
                     accelerator.speed = s.pointerSpeed
                     accelerator.acceleration = s.acceleration
+                    drag.tapToDrag = s.tapToDrag
+                    drag.dragLock = s.dragLock
+                    step { drag.onTouchStart(first.uptimeMillis) }
+                    reschedule()
                     taps.cancel() // in case the previous touch was interrupted
                     taps.onDown(first.id.value, first.position.x, first.position.y, first.uptimeMillis)
                     gestures.start(
@@ -190,26 +258,37 @@ private fun Touchpad(
                         first.position.y / density,
                         padWidthDp = size.width / density,
                         edgeScroll = s.edgeScroll,
+                        pointerOnly = drag.pointerOnly,
+                        threeFingerDrag = s.threeFingerDrag,
                     )
                     var lastTime = first.uptimeMillis
+                    var tap: TapDetector.Tap? = null
+                    var movedReported = false
+                    var threeFingerReported = false
                     while (true) {
                         val event = awaitPointerEvent()
                         for (c in event.changes) {
                             when {
                                 c.changedToDownIgnoreConsumed() ->
                                     taps.onDown(c.id.value, c.position.x, c.position.y, c.uptimeMillis)
-                                c.changedToUpIgnoreConsumed() -> taps.onUp(c.id.value, c.uptimeMillis)?.let { tap ->
-                                    view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                                    currentOnClick(if (tap == TapDetector.Tap.LEFT) Protocol.Button.LEFT else Protocol.Button.RIGHT)
-                                }
+                                c.changedToUpIgnoreConsumed() -> taps.onUp(c.id.value, c.uptimeMillis)?.let { tap = it }
                                 c.pressed -> taps.onMove(c.id.value, c.position.x, c.position.y)
                             }
+                        }
+                        if (!movedReported && taps.moved) {
+                            movedReported = true
+                            step { drag.onMoved() }
+                            reschedule()
                         }
                         val motion = gestures.update(
                             event.changes.map {
                                 TouchpadGestures.Finger(it.id.value, it.position.x / density, it.position.y / density, it.pressed)
                             },
                         )
+                        if (!threeFingerReported && gestures.mode == TouchpadGestures.Mode.THREE_FINGER_DRAG) {
+                            threeFingerReported = true
+                            step { drag.onThreeFingerDrag() }
+                        }
                         val time = event.changes.maxOf { it.uptimeMillis }
                         if (motion.moveX != 0f || motion.moveY != 0f) {
                             val gain = accelerator.gainFor(motion.moveX, motion.moveY, time - lastTime)
@@ -228,6 +307,9 @@ private fun Touchpad(
                         event.changes.forEach { it.consume() }
                         if (event.changes.none { it.pressed }) break
                     }
+                    if (tap != null) view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                    step { drag.onTouchEnd(tap, lastTime) }
+                    reschedule()
                 }
             },
     ) {
@@ -254,6 +336,11 @@ private fun Touchpad(
     }
 }
 
+/** Holds the pending [TapDrag] timeout so a new one can replace it. */
+private class TimerSlot {
+    var job: Job? = null
+}
+
 /** Width of the right-edge scroll strip: about libinput's 7 mm, and a 48 dp touch target. */
 private val EDGE_WIDTH = 48.dp
 
@@ -261,18 +348,17 @@ private val EDGE_WIDTH = 48.dp
 private const val SCROLL_UNITS_PER_DP = 3f
 
 /**
- * Sends "down" on touch and "up" on release. The button stays held until the
- * finger lifts, even if it slides off, so it can be held for drag-and-drop
- * while another finger moves on the touchpad.
+ * Reports "pressed" on touch and "released" on lift. The button stays held
+ * until the finger lifts, even if it slides off, so it can be held for
+ * drag-and-drop while another finger moves on the touchpad.
  */
 @Composable
 private fun ClickButton(
-    button: Protocol.Button,
     label: String,
-    onButton: (Protocol.Button, Boolean) -> Unit,
+    onPress: (pressed: Boolean) -> Unit,
     modifier: Modifier,
 ) {
-    val currentOnButton by rememberUpdatedState(onButton)
+    val currentOnPress by rememberUpdatedState(onPress)
     val view = LocalView.current
     var pressed by remember { mutableStateOf(false) }
     val color by animateColorAsState(if (pressed) Palette.SurfacePressed else Palette.Surface, tween(60), label = "press")
@@ -281,13 +367,13 @@ private fun ClickButton(
             .fillMaxHeight()
             .clip(RoundedCornerShape(16.dp))
             .background(color)
-            .pointerInput(button) {
+            .pointerInput(Unit) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
                     down.consume()
                     pressed = true
                     view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                    currentOnButton(button, true)
+                    currentOnPress(true)
                     try {
                         do {
                             val event = awaitPointerEvent()
@@ -296,7 +382,7 @@ private fun ClickButton(
                     } finally {
                         // Also runs if the gesture is cancelled, so a button never stays stuck.
                         pressed = false
-                        currentOnButton(button, false)
+                        currentOnPress(false)
                     }
                 }
             },

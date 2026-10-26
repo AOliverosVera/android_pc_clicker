@@ -55,6 +55,20 @@ parsing is bounds-checked, the server ignores traffic from outside private
 address ranges, `unsafe` Rust is limited to the two Win32 calls, and no
 secrets were ever in the repository.
 
+### Follow-up review (2026-10-25)
+
+This review covered everything added after protocol v2: the keyboard,
+scrolling, tap-to-click, the tray app with its autostart, and click-and-hold
+dragging.
+
+| Area | Checked | Result |
+|---|---|---|
+| Dependencies | `cargo audit` flagged `crypto-bigint 0.7.6` (under the P-256 code) as **yanked** by its authors. | Updated to `0.7.9`, the only non-yanked 0.7 release; all crypto tests and the shared vectors still pass. 0 known vulnerabilities. |
+| Keyboard | Parsing of KEYS messages; how keys are injected. | Strict: 1–8 strokes, unknown modifier bits, control characters and unknown key codes reject the whole message. Modifiers go down and up inside one `SendInput` call, so none can stay stuck and no other input lands in between. Only accepted inside an authenticated session. The extra power this gives a paired phone is listed under [Remaining risks](#remaining-risks). |
+| Scrolling | Parsing and injection. | Bounded `i16` values, best effort like moves, inside the session. |
+| Tray app | The pairing dialog, the launcher, "Start with Windows". | The dialog shows the sanitized phone name and the code, **No** is the default button, and the answer is bound to that pairing attempt (a stale dialog is closed as No). The launcher starts the server by absolute path, not via `PATH`. Autostart writes a quoted path under the current user's `Run` key only. |
+| Dragging | New gestures (tap-and-drag, drag lock, three-finger drag). | No protocol change: uses the existing authenticated, de-duplicated BUTTON messages. The phone-side state machine is tested so that every press is matched by a release, and leaving the touchpad (rotating, closing) always releases. The PC still releases held buttons after 3 s of silence, so a held drag can never outlive the connection. |
+
 ## Design
 
 All cryptography comes from vetted libraries: RustCrypto on the PC
@@ -176,8 +190,8 @@ phone's receive queue holds 64 packets, dropping the oldest.
 
 | Check | Result |
 |---|---|
-| Server unit tests (`cargo test`) | 52 pass: pairing (success, rejection, wrong key, conflicting data, invalid point, timeout, busy, closed, decision binding), sessions (forged, unknown, retransmitted, bounded), transport (replay, every single-bit flip, wrong key/session, reflection), revocation, timeouts, name sanitizing, DPAPI store (opaque on disk, tamper detection) |
-| App unit tests (`gradlew test`) | 26 pass: the same protocol layouts, crypto and transport properties |
+| Server unit tests (`cargo test`) | 63 pass: pairing (success, rejection, wrong key, conflicting data, invalid point, timeout, busy, closed, decision binding), sessions (forged, unknown, retransmitted, bounded), transport (replay, every single-bit flip, wrong key/session, reflection), revocation, timeouts, name sanitizing, DPAPI store (opaque on disk, tamper detection) |
+| App unit tests (`gradlew test`) | 84 pass: the same protocol layouts, crypto and transport properties, plus input logic (every drag press matched by a release, cancel always releases) |
 | Independent test vectors | `docs/test-vectors.txt` was computed with Python's `hashlib`/`hmac` and the `cryptography` package; both the Rust and the Kotlin implementations must reproduce it byte for byte |
 | End-to-end (`scripts/interop-test.ps1`) | The app's protocol code pairs with the real server binary over UDP, both sides compute the same code, then: forged HELLO ignored, replayed packet ignored, input delivered, unpair from the phone honored |
 | `cargo clippy`, Android Lint | 0 warnings, 0 issues |

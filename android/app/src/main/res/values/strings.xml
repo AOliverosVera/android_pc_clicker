@@ -32,6 +32,14 @@
     <string name="settings_scrolls_up">Up</string>
     <string name="settings_scrolls_down">Down</string>
     <string name="settings_scroll_speed">Scroll speed</string>
+    <string name="settings_dragging">Dragging</string>
+    <string name="settings_tap_to_drag">Tap, then touch again and move to drag</string>
+    <string name="settings_three_finger_drag">Drag with three fingers</string>
+    <string name="settings_drag_lock">When you lift your finger during a drag</string>
+    <string name="drag_lock_off">Drop</string>
+    <string name="drag_lock_timeout">Wait a moment</string>
+    <string name="drag_lock_sticky">Hold until a tap</string>
+    <string name="settings_drag_hint">You can also hold Left and move another finger on the touchpad.</string>
     <string name="settings_reset">Reset</string>
     <string name="settings_done">Done</string>
 

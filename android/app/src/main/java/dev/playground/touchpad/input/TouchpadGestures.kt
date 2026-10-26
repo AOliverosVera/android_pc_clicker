@@ -14,6 +14,12 @@ import kotlin.math.hypot
  *   moves the pointer instead, so the strip never feels like a dead zone
  *   (the same rule libinput uses for edge scrolling).
  *
+ * - With three-finger drag on, three fingers moving together move the pointer
+ *   as a drag (macOS style); [TapDrag] holds the button while
+ *   [mode] is [Mode.THREE_FINGER_DRAG].
+ * - A pointer-only touch (a drag that [TapDrag] is holding) only ever moves
+ *   the pointer, so a second finger brushing the pad can't turn it into a scroll.
+ *
  * Once a touch has started scrolling it keeps scrolling until every finger
  * lifts, so lifting one of two fingers never makes the pointer jump.
  * Positions are in dp; the caller applies acceleration and scroll speed.
@@ -30,7 +36,9 @@ class TouchpadGestures(private val slopDp: Float, private val edgeWidthDp: Float
         }
     }
 
-    enum class Mode { POINTER, EDGE_PENDING, EDGE_SCROLL, TWO_FINGER_PENDING, TWO_FINGER_SCROLL }
+    enum class Mode {
+        POINTER, EDGE_PENDING, EDGE_SCROLL, TWO_FINGER_PENDING, TWO_FINGER_SCROLL, THREE_FINGER_PENDING, THREE_FINGER_DRAG,
+    }
 
     var mode = Mode.POINTER
         private set
@@ -43,12 +51,26 @@ class TouchpadGestures(private val slopDp: Float, private val edgeWidthDp: Float
     private var centroidIds = emptySet<Long>()
     private var pendingX = 0f
     private var pendingY = 0f
+    private var pointerOnly = false
+    private var threeFingerDrag = false
 
     /**
      * A new touch: its first finger landed at ([x], [y]) on a pad [padWidthDp]
      * wide. With [edgeScroll] off, the right edge behaves like the rest.
+     * A [pointerOnly] touch only moves the pointer; [threeFingerDrag] enables
+     * that gesture for this touch.
      */
-    fun start(id: Long, x: Float, y: Float, padWidthDp: Float, edgeScroll: Boolean) {
+    fun start(
+        id: Long,
+        x: Float,
+        y: Float,
+        padWidthDp: Float,
+        edgeScroll: Boolean,
+        pointerOnly: Boolean = false,
+        threeFingerDrag: Boolean = false,
+    ) {
+        this.pointerOnly = pointerOnly
+        this.threeFingerDrag = threeFingerDrag
         last.clear()
         last[id] = x to y
         tracked = id
@@ -56,23 +78,27 @@ class TouchpadGestures(private val slopDp: Float, private val edgeWidthDp: Float
         startY = y
         centroid = null
         val edge = edgeWidthDp.coerceAtMost(padWidthDp * MAX_EDGE_FRACTION)
-        mode = if (edgeScroll && x >= padWidthDp - edge) Mode.EDGE_PENDING else Mode.POINTER
+        mode = if (!pointerOnly && edgeScroll && x >= padWidthDp - edge) Mode.EDGE_PENDING else Mode.POINTER
     }
 
     /** The current state of every finger, after each pointer event. */
     fun update(fingers: List<Finger>): Motion {
         val down = fingers.filter { it.down }
-        if (down.size >= 2 && (mode == Mode.POINTER || mode == Mode.EDGE_PENDING)) {
-            mode = Mode.TWO_FINGER_PENDING
-            centroid = null
-            pendingX = 0f
-            pendingY = 0f
+        if (!pointerOnly) {
+            if (threeFingerDrag && down.size >= 3 &&
+                (mode == Mode.POINTER || mode == Mode.EDGE_PENDING || mode == Mode.TWO_FINGER_PENDING)
+            ) {
+                enter(Mode.THREE_FINGER_PENDING)
+            } else if (down.size >= 2 && (mode == Mode.POINTER || mode == Mode.EDGE_PENDING)) {
+                enter(Mode.TWO_FINGER_PENDING)
+            }
         }
         val motion = when (mode) {
             Mode.POINTER -> trackedDelta(down)?.let { (dx, dy) -> Motion(moveX = dx, moveY = dy) }
             Mode.EDGE_PENDING -> edgePending(down)
             Mode.EDGE_SCROLL -> trackedDelta(down)?.let { (_, dy) -> Motion(scrollY = dy) }
             Mode.TWO_FINGER_PENDING, Mode.TWO_FINGER_SCROLL -> twoFinger(down)
+            Mode.THREE_FINGER_PENDING, Mode.THREE_FINGER_DRAG -> threeFinger(down)
         }
         last.clear()
         for (f in down) last[f.id] = f.x to f.y
@@ -100,9 +126,16 @@ class TouchpadGestures(private val slopDp: Float, private val edgeWidthDp: Float
         }
     }
 
-    private fun twoFinger(down: List<Finger>): Motion? {
-        if (down.size < 2) {
-            // Down to one finger: wait (no pointer jump) until all lift.
+    private fun enter(next: Mode) {
+        mode = next
+        centroid = null
+        pendingX = 0f
+        pendingY = 0f
+    }
+
+    /** Movement of the fingers' centre since the last event, or null right after a finger was added or lifted. */
+    private fun centroidDelta(down: List<Finger>): Pair<Float, Float>? {
+        if (down.isEmpty()) {
             centroid = null
             return null
         }
@@ -115,8 +148,16 @@ class TouchpadGestures(private val slopDp: Float, private val edgeWidthDp: Float
             centroidIds = ids
             return null
         }
-        val dx = now.first - previous.first
-        val dy = now.second - previous.second
+        return (now.first - previous.first) to (now.second - previous.second)
+    }
+
+    private fun twoFinger(down: List<Finger>): Motion? {
+        if (down.size < 2) {
+            // Down to one finger: wait (no pointer jump) until all lift.
+            centroid = null
+            return null
+        }
+        val (dx, dy) = centroidDelta(down) ?: return null
         if (mode == Mode.TWO_FINGER_PENDING) {
             pendingX += dx
             pendingY += dy
@@ -125,6 +166,24 @@ class TouchpadGestures(private val slopDp: Float, private val edgeWidthDp: Float
             return Motion(scrollX = pendingX, scrollY = pendingY)
         }
         return Motion(scrollX = dx, scrollY = dy)
+    }
+
+    private fun threeFinger(down: List<Finger>): Motion? {
+        // Before the drag starts all three must stay down; once dragging, it
+        // follows whatever fingers remain until they all lift.
+        if (mode == Mode.THREE_FINGER_PENDING && down.size < 3) {
+            centroid = null
+            return null
+        }
+        val (dx, dy) = centroidDelta(down) ?: return null
+        if (mode == Mode.THREE_FINGER_PENDING) {
+            pendingX += dx
+            pendingY += dy
+            if (hypot(pendingX, pendingY) <= slopDp) return null
+            mode = Mode.THREE_FINGER_DRAG
+            return Motion(moveX = pendingX, moveY = pendingY)
+        }
+        return Motion(moveX = dx, moveY = dy)
     }
 
     companion object {
